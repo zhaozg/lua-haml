@@ -1,0 +1,10 @@
+doc
+.DS_Store
+docs
+*.swp
+coverage.html
+pkg
+/json.lua
+/lhtml.lua
+/referencel.html
+/env.bat
