@@ -6,5 +6,5 @@ coverage.html
 pkg
 /json.lua
 /lhtml.lua
-/referencel.html
+/reference.html
 /env.bat
