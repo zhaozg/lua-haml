@@ -24,10 +24,7 @@ local function _recurse (node, options, locals)
   end
   assert(type(node), 'table')
   local tag = node.tag
-  if #options.indent == 0 and node.space then
-    options.indent = node.space
-  end
-  local pad = options.tidy and node.space or ''
+  local pad = options.tidy and (options.indent) or ''
   local A, B, kT, vT = {}, {}
   local self_closing_modifier, inline_content = node.self_closing_modifier, node.inline_content
   node.space, node.tag, node.self_closing_modifier, node.inline_content = nil, nil, nil, nil
@@ -93,6 +90,8 @@ local function _recurse (node, options, locals)
           v = concat(v, ' '):gsub("' '", ' ')
         end
         A[#A + 1] = format('%s=%s', k, v)
+      elseif vT=='boolean' then
+        A[#A + 1] = k
       end
     end
   end

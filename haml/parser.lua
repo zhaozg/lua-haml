@@ -1,5 +1,4 @@
 local lpeg = require "lpeg"
-
 local error = error
 local ipairs = ipairs
 local next = next
@@ -13,15 +12,8 @@ local remove = table.remove
 local upper = string.upper
 
 local P, S, V, R = lpeg.P, lpeg.S, lpeg.V, lpeg.R
-local C, Cb, Cg, Cf, Ct, Cmt = lpeg.C, lpeg.Cb, lpeg.Cg, lpeg.Cf, lpeg.Ct, lpeg.Cmt
-
---- util functions
-local function psplit (s, sep)
-  sep = lpeg.P(sep)
-  local elem = lpeg.C((1 - sep)^0)
-  local p = lpeg.Ct(elem * (sep * elem)^0)
-  return lpeg.match(p, s)
-end
+local C, Cb, Cg, Cf, Ct, Cp, Cmt = lpeg.C, lpeg.Cb, lpeg.Cg, lpeg.Cf, lpeg.Ct, lpeg.Cp, lpeg.Cmt
+local match = lpeg.match
 
 --- Flattens a table of tables.
 local function flatten (...)
@@ -100,9 +92,9 @@ local function parse_html_style_attributes (a)
   local value = C(quoted_string + name)
   local sep = (P " " + eol)^1
   local assign = P '='
-  local pair = Cg(name * assign * value) * sep^-1
-  local list = S "(" * Cf(Ct "" * pair^0, rawset) * S ")"
-  return lpeg.match(list, a) or error(("Could not parse attributes '%s'"):format(a))
+  local pair = Cg(name * (assign * value)^-1) * sep^-1
+  local list = S "(" * Cf(Ct "" * pair^0, function(t,k,v) return rawset(t, k, v or true) end) * S ")"
+  return match(list, a) or error(("Could not parse attributes '%s'"):format(a))
 end
 
 local function parse_ruby_style_attributes (a)
@@ -116,7 +108,7 @@ local function parse_ruby_style_attributes (a)
   local assign = P '=>'
   local pair = Cg(key * inline_whitespace^0 * assign * inline_whitespace^0 * value) * sep^-1
   local list = S "{" * inline_whitespace^0 * Cf(Ct "" * pair^0, rawset) * inline_whitespace^0 * S "}"
-  return lpeg.match(list, a) or error(("Could not parse attributes '%s'"):format(a))
+  return match(list, a) or error(("Could not parse attributes '%s'"):format(a))
 end
 
 local html_style_attributes = P {
@@ -152,21 +144,52 @@ local function flatten_ids_and_classes (t)
   return out
 end
 
+--- util functions
+local function psplit (s, sep, init)
+  local elem = (P(1) - sep)^0 * Cp()
+  local p = Ct(elem * (sep * elem)^0)
+  return match(p, s, init)
+end
+
 local nested_content = Cg((Cmt(Cb "space", function (subject, index, spaces)
       local buffer = {}
-      local num_spaces = tostring(spaces or ""):len()
-      local start = subject:sub(index)
-      for _, line in ipairs(psplit(start, "\n")) do
-        if lpeg.match(S " \t"^(num_spaces + 1), line) then
+      local cps = psplit(subject, '\n', index)
+      local indent,cp=nil,0
+      for i=1,#cps do
+        if not indent then
+          indent, line = match(C(spaces*inline_whitespace^1) * C(P(1)^0), subject:sub(index, cps[i]))
+        else
+          line = match(indent * C(P(1)^0), subject:sub(index, cps[i]))
+        end
+        if line then
           insert(buffer, line)
-        elseif line == "" then
+          buffer.space = indent
+          if cps[i]>#subject then
+            index = cps[i]-1
+          else
+            index = cps[i]+1
+          end
+        else
+          index = index-1
+          break
+        end
+
+--[[
+        line = match(spaces * C(P(1)^0), subject:sub(index, cps[i]))
+        print("line",require('openssl').hex(line))
+        if line=='\n' then
+          index = cps[i]
+          print(string.sub(subject,index,index+1))
+          break
+        elseif line and #line>0 then
+          index = cps[i]+1
           insert(buffer, line)
         else
           break
         end
+--]]
       end
-      local match = concat(buffer, "\n")
-      return index + match:len(), match
+      return index, buffer
     end)), "content")
 
 local css_name = S "-_" + alnum^1
@@ -260,8 +283,15 @@ local function tidy (t)
 end
 
 local function parser (input)
-  local gram = lpeg.match(grammar, input)
-  return tidy(gram)
+  local _, gram = xpcall(function()
+    return match(grammar,input)
+  end,
+  debug.traceback)
+  if _ then
+    return tidy(gram)
+  else
+    return ''
+  end
 end
 
 return parser

@@ -24,7 +24,7 @@ local _options = {
   escape_html = false,
   encoding = "utf-8",
   format = "xhtml",
-  indent = "  ",
+  indent = '',
   newline = "\n",
   preserve = {
     pre = true,
@@ -76,8 +76,8 @@ end
 
 local M = {}
 
-function M.parse (haml_string)
-  return parser(haml_string:gsub('^' .. string.char(0xEF, 0xBB, 0xBF), ''))
+function M.parse (haml_string,options)
+  return parser(haml_string:gsub('^' .. string.char(0xEF, 0xBB, 0xBF), ''),options)
 end
 
 function M.compile (input, options, locals)
