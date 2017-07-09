@@ -31,7 +31,7 @@ local json      = require 'json' or
   should add tests for this in your implementation's test rather than here.
 * optional: whether or not the test is optional
 --]]
-local f = io.open('test.json','rb')
+local f = assert(io.open('spec/tests.json','rb'))
 local ctx = f:read("*a")
 f:close()
 
@@ -51,7 +51,14 @@ for k,test in pairs(j) do
       "config"   : "config params",
       "optional" : true|false
     --]]
-    local html = haml.render(T.haml,T.config or {}, T.locals)
+
+    html = haml.render(T.haml,T.config or {}, T.locals)
+    --[[
+    local ret,html = pcall(haml.render,T.haml,T.config or {}, T.locals)
+    if not ret then
+      html = ''
+    end
+    --]]
     if (html~=T.html ) then
       print('HAML:'..T.haml)
       print('NEED:'..T.html)
