@@ -286,7 +286,9 @@ local function parser (input)
       _ = tidy(_)
       return _
     end,
-    function() print(debug.traceback("parse haml error",2)) end
+    function(msg)
+      print(debug.traceback(msg,2)
+    ) end
   )
   if _ then
     return gram
