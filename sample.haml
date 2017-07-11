@@ -1,6 +1,7 @@
 - local title = "Lua Haml: Currently Supported Language"
 !!! XML
 !!!
+- local locals = {}
 %html(xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en")
   %head
     %title= title
@@ -33,7 +34,7 @@
     -# the feature is emulated in Lua Haml. In order to make a variable available for string interpolation,
     -# you have to assign it to the "locals" table. Then you can interpolate variables inside content and
     -# filters, which can be useful, for example, to generate Javascript:
-    - local greetings = greetings
+    - locals.greetings = greetings
     :javascript
       //alert("#{greetings.pt}");
     %p= "#{greetings.en}"
@@ -58,14 +59,14 @@
                              thanks
                      to
                                           http://www.network-science.de/ascii
-    #more_stuff(type="multline-content")
-      %p= 1 + |
-          2 + |
-          3 + |
-          4   |
-    #more_more_stuff
-      :plain
-        <p>
-          <a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-xhtml10-blue"
-            alt="Valid XHTML 1.0 Transitional" height="31" width="88" /></a>
-        </p>
+  #more_stuff(type="multline-content")
+    %p= 1 + |
+        2 + |
+        3 + |
+        4   |
+  #more_more_stuff
+    :plain
+      <p>
+        <a href="http://validator.w3.org/check?uri=referer"><img src="http://www.w3.org/Icons/valid-xhtml10-blue"
+          alt="Valid XHTML 1.0 Transitional" height="31" width="88" /></a>
+      </p>

@@ -2,9 +2,19 @@ local insert = table.insert
 local concat = table.concat
 
 --filter
-local function preserve_filter (node, options)
+local function plain_filter (node, options, parent)
+  local content = node.content:gsub("[%s]*$", ""):gsub('\n$', '')
+  local indent = (parent and parent.space) and node.space:sub(#parent.space+1) or node.space
+  indent = #indent==0 and options.indent or indent
+  content = content:gsub('^'..indent,''):gsub('\n'..indent,'\n')
+  return content
+end
+
+local function preserve_filter (node, options, parent)
   local content = node.content
-  content = concat(content)
+  local indent = (parent and parent.space) and node.space:sub(#parent.space+1) or node.space
+  indent = #indent==0 and options.indent or indent
+  content = content:gsub('^'..indent,''):gsub('\n'..indent,'\n')
   return content:gsub("\n", '&#x000A;'):gsub("\r", '&#x000D;')
 end
 
@@ -19,7 +29,9 @@ end
 
 local function escaped_filter (node, options)
   local content = node.content
-  content = type(content)=='table' and concat(content) or content
+  local indent = (parent and parent.space) and node.space:sub(#parent.space+1) or node.space
+  indent = #indent==0 and options.indent or indent
+  content = content:gsub('^'..indent,''):gsub('\n'..indent,'\n')
   return escape_html(content, options.html_escapes)
 end
 
@@ -61,20 +73,12 @@ local function code_filter (node, options)
   return node.content
 end
 
-local function plain_filter (node, options)
-  local content = node.content
-  content = type(content)=='table' and concat(content) or content
-  content = content:gsub('\n$', '')
-  return content
-end
-
 local function cdata_filter (node, options)
   local content = node.content
   local cdata = {}
   cdata.tag = {
     "<![CDATA[",
-    "]]>",
-
+    "]]>"
   }
   cdata.space = node.space
   cdata[1] = content
@@ -84,7 +88,7 @@ local function cdata_filter (node, options)
 end
 
 local function css_filter (node, options)
-  local content = node.content
+  local content = node.content:gsub("[%s]*$", ""):gsub('\n$', '')
 
   local css = {}
   css.tag = {
@@ -125,18 +129,15 @@ local _filters = {
   preserve = preserve_filter,
 }
 
-local function filter_for (node, options)
+local function filter_for (node, options, parent)
   local func
   if _filters[node.filter] then
     local content = node.content
+    content = content:gsub('^\n', '')
     if node.filter ~= 'preserve' and
        node.filter ~= 'escaped' and
        node.filter ~= 'plain'
     then
-      for i=1,#content do
-        content[i] = content.space..content[i]
-      end
-      content = table.concat(content)
       content = content:gsub('\n$', '')
     end
     node.content = content
@@ -144,7 +145,7 @@ local function filter_for (node, options)
   else
     error(string.format("No such filter \"%s\"", node.filter))
   end
-  return func(node, options)
+  return func(node, options, parent)
 end
 
 return {

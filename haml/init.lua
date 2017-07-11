@@ -24,7 +24,7 @@ local _options = {
   escape_html = false,
   encoding = "utf-8",
   format = "xhtml",
-  indent = '',
+  indent = '  ',
   newline = "\n",
   preserve = {
     pre = true,
@@ -53,7 +53,7 @@ local _options = {
     param = true,
   },
 
-  tidy = true,
+  tidy = false,
 }
 
 --- Merge two or more tables together.
@@ -85,7 +85,7 @@ function M.compile (input, options, locals)
   if type(input) == 'string' then
     input = parser(input)
   end
-  return compile(input, options, nil, locals)
+  return compile(input, options, locals)
 end
 
 --- Render a Haml file.

@@ -182,4 +182,7 @@ for i, v in ipairs(arg) do
     os.exit()
   end
 end
-exec_func(input_func())
+local _ENV = {}
+setmetatable(_ENV, {__index = _G})
+setfenv(exec_func,_ENV)
+exec_func(input_func(),{}, _ENV)

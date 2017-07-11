@@ -132,7 +132,7 @@ end
 
 --- tag
 -- Precompile an (X)HTML tag for the current precompiler state.
-local function tag_for (node, parent, options)
+local function tag_for (node, options, parent)
   local ctx
   if node.outer_whitespace_modifier then
     if parent then
@@ -179,7 +179,6 @@ local function code_for (node, options)
   if node.operator == "silent_script" then
     node.operator = nil
     node.tag = '-'
-
   elseif node.operator == "script" then
     node.operator = nil
     node.tag = '='
@@ -196,14 +195,12 @@ local function code_for (node, options)
   return node
 end
 
-local function handle_node (node, options, parent)
+local function handle_node (node, options, locals, parent)
   local operator = node.operator
   if operator == "header" then
     node = header_for(node, options) or ''
   elseif operator == "filter" then
-    node = filter.filter_for(node, options)
-  elseif operator == "silent_comment" then
-    node = ''
+    node = filter.filter_for(node, options, parent)
   elseif operator == "markup_comment" or operator == "conditional_comment" then
     node = comment_for(node, options)
   elseif operator == "script" then
@@ -216,7 +213,7 @@ local function handle_node (node, options, parent)
   end
   if node then
     if node.tag then
-      return tag_for(node, parent, options)
+      return tag_for(node, options, parent)
     elseif node.code then
       return code_for(node, options)
     elseif node.unparsed then
@@ -270,26 +267,31 @@ end
 
 --- Precompile Haml into Lua code.
 -- @param nodes A table of parsed nodes produced by the parser.
-local function compile (nodes, options, parent, locals)
+local function compile (nodes, options, locals, parent)
   procompile(nodes)
   local index = 1
   repeat
     local node = nodes[index]
     if type(node) == 'table' then
-      if #node == 0 then
-        node = handle_node(node, options, nodes, locals)
+      --remove silent_comment
+      if node.operator=="silent_comment" then
+        table.remove(nodes,index)
       else
-        node = compile(node, options, nodes, locals)
-        if node then
-          node = handle_node(node, options, nodes, locals)
+        if #node == 0 then
+          node = handle_node(node, options, locals, nodes)
+        else
+          node = assert(compile(node, options, locals, nodes))
+          node = assert(handle_node(node, options, locals, nodes))
         end
+        nodes[index] = assert(node)
+        index = index + 1
       end
-      nodes[index] = assert(node)
+    else
+      index = index + 1
     end
-    index = index + 1
   until nodes[index] == nil
 
-  nodes = handle_node(nodes, options, parent, locals)
+  nodes = handle_node(nodes, options, locals, parent)
   return nodes
 end
 

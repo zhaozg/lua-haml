@@ -6,35 +6,21 @@ local pairs = pairs
 local rawset = rawset
 local tostring = tostring
 
+local upper  = string.upper
 local concat = table.concat
 local insert = table.insert
 local remove = table.remove
-local upper = string.upper
 
 local P, S, V, R = lpeg.P, lpeg.S, lpeg.V, lpeg.R
 local C, Cb, Cg, Cf, Ct, Cp, Cmt = lpeg.C, lpeg.Cb, lpeg.Cg, lpeg.Cf, lpeg.Ct, lpeg.Cp, lpeg.Cmt
 local match = lpeg.match
+------------------------------------------------------------------------------
 
---- Flattens a table of tables.
-local function flatten (...)
-  local out = {}
-  local argv = {
-    ...,
-
-  }
-  for _, attr in ipairs(argv) do
-    for k, v in pairs(attr) do
-      out[k] = v
-    end
-  end
-  return out
-end
-
-
+--basic rules
 local alnum = R("az", "AZ", "09")
 local leading_whitespace = Cg(S " \t"^0, "space")
 local inline_whitespace = S " \t"
-local eol = P "\n" + "\r\n" + "\r"
+local eol = P "\n" + P("\r\n") + P("\r")
 local empty_line = Cg(P "", "empty_line")
 local multiline_modifier = Cg(P "|", "multiline_modifier")
 local unparsed = Cg((1 - eol - multiline_modifier)^1, "unparsed")
@@ -43,32 +29,19 @@ local singlequoted_string = P("'" * ((1 - S "'\r\n\f\\") + (P '\\' * 1))^0 * "'"
 local doublequoted_string = P('"' * ((1 - S '"\r\n\f\\') + (P '\\' * 1))^0 * '"')
 local quoted_string = singlequoted_string + doublequoted_string
 
-local operator_symbols = {
-  conditional_comment = P "/[",
-  escape = P "\\",
-  filter = P ":",
-  header = P "!!!",
-  markup_comment = P "/",
-  script = P "=",
-  silent_comment = P "-#" + "--",
-  silent_script = P "-",
-  tag = P "%",
-  escaped_script = P "&=",
-  unescaped_script = P "!=",
-  preserved_script = P "~",
-
-}
-
--- This builds a table of capture patterns that return the operator name rather
--- than the literal operator string.
-local operators = {}
-for k, v in pairs(operator_symbols) do
-  operators[k] = Cg(v / function ()
-      return k
-    end, "operator")
-end
-
-local script_operator = P(operators.silent_script + operators.script + operators.escaped_script + operators.unescaped_script + operators.preserved_script)
+--prefix of rules
+local tag = P "%"
+local escape = P "\\"
+local filter = P ":"
+local header = P "!!!"
+local script = P "="
+local silent_script = P "-"
+local markup_comment = P "/"
+local silent_comment = P "-#" + "--"
+local escaped_script = P "&="
+local unescaped_script = P "!="
+local preserved_script = P "~"
+local conditional_comment = P "/["
 
 -- (X)HTML Doctype or XML prolog
 local prolog = Cg(P "XML" + P "xml" / upper, "prolog")
@@ -77,14 +50,21 @@ local version = Cg(P "1.1" + "1.0", "version")
 local doctype = Cg((R("az", "AZ")^1 + "5") / upper, "doctype")
 local prolog_and_charset = (prolog * (inline_whitespace^1 * charset^1)^0)
 local doctype_or_version = doctype + version
-local header = operators.header * (inline_whitespace * (prolog_and_charset + doctype_or_version))^0
 
--- Modifiers that follow Haml markup tags
-local modifiers = {
-  self_closing = Cg(P "/", "self_closing_modifier"),
-  inner_whitespace = Cg(P "<", "inner_whitespace_modifier"),
-  outer_whitespace = Cg(P ">", "outer_whitespace_modifier"),
-}
+------------------------------------------------------------------------------
+--- Flattens a table of tables.
+local function flatten (...)
+  local out = {}
+  local argv = {
+    ...
+  }
+  for _, attr in ipairs(argv) do
+    for k, v in pairs(attr) do
+      out[k] = v
+    end
+  end
+  return out
+end
 
 -- Markup attributes
 local function parse_html_style_attributes (a)
@@ -111,17 +91,6 @@ local function parse_ruby_style_attributes (a)
   return match(list, a) or error(("Could not parse attributes '%s'"):format(a))
 end
 
-local html_style_attributes = P {
-  "(" * ((quoted_string + (P(1) - S "()")) + V(1))^0 * ")",
-
-} / parse_html_style_attributes
-local ruby_style_attributes = P {
-  "{" * ((quoted_string + (P(1) - S "{}")) + V(1))^0 * "}",
-
-} / parse_ruby_style_attributes
-local any_attributes = html_style_attributes + ruby_style_attributes
-local attributes = Cg(Ct((any_attributes * any_attributes^0)) / flatten, "attributes")
-
 -- Haml HTML elements
 -- Character sequences for CSS and XML/HTML elements. Note that many invalid
 -- names are allowed because of Haml's flexibility.
@@ -144,89 +113,124 @@ local function flatten_ids_and_classes (t)
   return out
 end
 
---- util functions
-local function psplit (s, sep, init)
-  local elem = (P(1) - sep)^0 * Cp()
-  local p = Ct(elem * (sep * elem)^0)
-  return match(p, s, init)
+---
+local function psplit(s, sep, index)
+  sep = lpeg.P(sep)
+  local elem = lpeg.C((1 - sep)^0)
+  local p = lpeg.Ct(elem * (sep * elem)^0)
+  return lpeg.match(p, s, index)
 end
 
-local nested_content = Cg((Cmt(Cb "space", function (subject, index, spaces)
+local nested_content = Cg(
+  (Cmt(
+    Cb "space",
+    function (subject, index, spaces)
       local buffer = {}
-      local cps = psplit(subject, '\n', index)
-      local indent,cp=nil,0
-      for i=1,#cps do
-        if not indent then
-          indent, line = match(C(spaces*inline_whitespace^1) * C(P(1)^0), subject:sub(index, cps[i]))
-        else
-          line = match(indent * C(P(1)^0), subject:sub(index, cps[i]))
-        end
-        if line then
+      local num_spaces = tostring(spaces or ""):len()
+      for _, line in ipairs(psplit(subject, "\n", index)) do
+        if match(P" "^(num_spaces + 1), line) then
           insert(buffer, line)
-          buffer.space = indent
-          if cps[i]>#subject then
-            index = cps[i]-1
-          else
-            index = cps[i]+1
-          end
-        else
-          index = index-1
-          break
-        end
-
---[[
-        line = match(spaces * C(P(1)^0), subject:sub(index, cps[i]))
-        print("line",require('openssl').hex(line))
-        if line=='\n' then
-          index = cps[i]
-          print(string.sub(subject,index,index+1))
-          break
-        elseif line and #line>0 then
-          index = cps[i]+1
+        elseif line == "" then
           insert(buffer, line)
         else
           break
         end
---]]
       end
-      return index, buffer
-    end)), "content")
+      local match = concat(buffer, "\n")
+      return index + match:len(), match
+    end)
+  ),
+  "content"
+)
 
-local css_name = S "-_" + alnum^1
-local class = P "." * Ct(Cg(css_name^1, "class"))
-local id = P "#" * Ct(Cg(css_name^1, "id"))
-local css = P {
-  (class + id) * V(1)^0,
+------------------------------------------------------------------------------
+local syntax = {
+  'init',
 
+  --operator
+  tag                 = Cg(tag                 / function () return 'tag'                 end, "operator"),
+  escape              = Cg(escape              / function () return 'escape'              end, "operator"),
+  filter              = Cg(filter              / function () return 'filter'              end, "operator"),
+  header              = Cg(header              / function () return 'header'              end, "operator"),
+  script              = Cg(script              / function () return 'script'              end, "operator"),
+  silent_script       = Cg(silent_script       / function () return 'silent_script'       end, "operator"),
+  markup_comment      = Cg(markup_comment      / function () return 'markup_comment'      end, "operator"),
+  silent_comment      = Cg(silent_comment      / function () return 'silent_comment'      end, "operator"),
+  escaped_script      = Cg(escaped_script      / function () return 'escaped_script'      end, "operator"),
+  unescaped_script    = Cg(unescaped_script    / function () return 'unescaped_script'    end, "operator"),
+  preserved_script    = Cg(preserved_script    / function () return 'preserved_script'    end, "operator"),
+  conditional_comment = Cg(conditional_comment / function () return 'conditional_comment' end, "operator"),
+
+  script_operator     = P(V'silent_script' + V'script' + V'escaped_script' + V'unescaped_script' + V'preserved_script'),
+
+  -- Modifiers that follow Haml markup tags
+  self_closing        = Cg(P "/", "self_closing_modifier"),
+  inner_whitespace    = Cg(P "<", "inner_whitespace_modifier"),
+  outer_whitespace    = Cg(P ">", "outer_whitespace_modifier"),
+  tag_modifiers       = (V'self_closing' + (V'inner_whitespace' + V'outer_whitespace')),
+
+  --attributes
+  html_style_attributes = P { "(" * ((quoted_string + (P(1) - S "()")) + V(1))^0 * ")" } / parse_html_style_attributes,
+  ruby_style_attributes = P { "{" * ((quoted_string + (P(1) - S "{}")) + V(1))^0 * "}" } / parse_ruby_style_attributes,
+  any_attributes        = V'html_style_attributes' + V'ruby_style_attributes',
+  attributes            = Cg(Ct((V'any_attributes' * V'any_attributes'^0)) / flatten, "attributes"),
+
+  --inline
+  inline_code         = V'script' * inline_whitespace^0 * Cg(unparsed^0 * -multiline_modifier /
+                        function (a)
+                          return a:gsub("\\", "\\\\")
+                        end, "inline_code"),
+  multiline_code      = V'script' * inline_whitespace^0 * Cg(((1 - multiline_modifier)^1 * multiline_modifier)^0 /
+                        function (a)
+                          return a:gsub("%s*|%s*", " ")
+                        end, "inline_code"),
+  inline_content      = inline_whitespace^0 * Cg(unparsed, "inline_content"),
+
+-- css and tag
+  css                 = P{
+                        'init',
+                        css_name = S "-_" + alnum^1,
+                        class    = P "." * Ct(Cg(V'css_name'^1, "class")),
+                        id       = P "#" * Ct(Cg(V'css_name'^1, "id")),
+                        init     = (V'class' + V'id') * V('init')^0
+                      },
+  html_name           = R("az", "AZ", "09") + S ":-_",
+  explicit_tag        = "%" * Cg(V'html_name'^1, "tag"),
+  implict_tag         = Cg(-S(1) * #V'css' /
+                        function ()
+                          return default_tag
+                        end, "tag"
+                      ),
+  haml_tag            = (V'explicit_tag' + V'implict_tag') * Cg(Ct(V'css') / flatten_ids_and_classes, "css")^0,
+
+
+  --haml
+  haml_header         = V'header' * (inline_whitespace * (prolog_and_charset + doctype_or_version))^0,
+  haml_element        = Ct(Cg(Cp(),"pos") * leading_whitespace * (
+    -- Haml markup
+    (V'haml_tag' * V'attributes'^0 * V'tag_modifiers'^0 * (V'inline_code' + V'multiline_code' + V'inline_content')^0) +
+    -- Doctype or prolog
+    V'haml_header' +
+    -- Silent comment
+    V'silent_comment' * (inline_whitespace^0 * Cg(unparsed^0, "comment") * nested_content) +
+    -- Script
+    V'script_operator' * inline_whitespace^1 * Cg(unparsed^0, "code") +
+    -- IE conditional comments
+    (V'conditional_comment' * Cg((P(1) - "]")^1, "condition")) * "]" +
+    -- Markup comment
+    (V'markup_comment' * inline_whitespace^0 * unparsed^0) +
+    -- Filtered block
+    (V'filter' * Cg((P(1) - eol)^0, "filter") * nested_content) +
+    -- Escaped
+    (V'escape' * unparsed^0) +
+    -- Unparsed content
+    unparsed +
+    -- Last resort
+    empty_line
+  )),
+  --return array of all haml_element captured
+  init = Ct(V'haml_element' * (eol^1 * V'haml_element')^0)
 }
-local html_name = R("az", "AZ", "09") + S ":-_"
-local explicit_tag = "%" * Cg(html_name^1, "tag")
-local implict_tag = Cg(-S(1) * #css / function ()
-    return default_tag
-  end, "tag")
-local haml_tag = (explicit_tag + implict_tag) * Cg(Ct(css) / flatten_ids_and_classes, "css")^0
-local inline_code = operators.script * inline_whitespace^0 * Cg(unparsed^0 * -multiline_modifier / function (a)
-    return a:gsub("\\", "\\\\")
-  end, "inline_code")
-local multiline_code = operators.script * inline_whitespace^0 * Cg(((1 - multiline_modifier)^1 * multiline_modifier)^0 / function (a)
-    return a:gsub("%s*|%s*", " ")
-  end, "inline_code")
-local inline_content = inline_whitespace^0 * Cg(unparsed, "inline_content")
-local tag_modifiers = (modifiers.self_closing + (modifiers.inner_whitespace + modifiers.outer_whitespace))
-
--- Core Haml grammar
-local haml_element = leading_whitespace * ( -- Haml markup
- (haml_tag * attributes^0 * tag_modifiers^0 * (inline_code + multiline_code + inline_content)^0) +  -- Doctype or prolog
- header +  -- Silent comment
- operators.silent_comment * inline_whitespace^0 * Cg(unparsed^0, "comment") * nested_content +  -- Script
- script_operator * inline_whitespace^1 * Cg(unparsed^0, "code") +  -- IE conditional comments
- (operators.conditional_comment * Cg((P(1) - "]")^1, "condition")) * "]" +  -- Markup comment
- (operators.markup_comment * inline_whitespace^0 * unparsed^0) +  -- Filtered block
- (operators.filter * Cg((P(1) - eol)^0, "filter") * eol * nested_content) +  -- Escaped
- (operators.escape * unparsed^0) +  -- Unparsed content
- unparsed +  -- Last resort
- empty_line)
-local grammar = Ct(Ct(haml_element) * (eol^1 * Ct(haml_element))^0)
 
 local function tidy (t)
   local root = {}
@@ -274,7 +278,9 @@ local function tidy (t)
         parent[v] = ctx
         ctx = v
       else
-        assert(nil, 'never here')
+        print('#v.space',#v.space)
+        print('#ctx.space',#ctx.space)
+        assert(nil, string.format('Error at %d, %d and %d mismatch',v.pos,#v.space,#ctx.space))
       end
     end
   until i > #t
@@ -284,11 +290,15 @@ end
 
 local function parser (input)
   local _, gram = xpcall(function()
-    return match(grammar,input)
-  end,
-  debug.traceback)
+      --syntax = require'pegdebug'.trace(syntax)
+      local _ = match(syntax,input)
+      _ = tidy(_)
+      return _
+    end,
+    function() print(debug.traceback("parse haml error",2)) end
+  )
   if _ then
-    return tidy(gram)
+    return gram
   else
     return ''
   end

@@ -18,13 +18,14 @@ local function handle_code (code, locals)
   return tostring(f())
 end
 
-local function _recurse (node, options, locals)
-  if type(node) == 'string' then
+local function _recurse (node, options, locals, lvl)
+  lvl = lvl or 0
+  if type(node) == 'string' or node==nil then
     return node
   end
   assert(type(node), 'table')
   local tag = node.tag
-  local pad = options.tidy and (options.indent) or ''
+  local pad = options.tidy and string.rep(options.indent, lvl) or ''
   local A, B, kT, vT = {}, {}
   local self_closing_modifier, inline_content = node.self_closing_modifier, node.inline_content
   node.space, node.tag, node.self_closing_modifier, node.inline_content = nil, nil, nil, nil
@@ -58,9 +59,9 @@ local function _recurse (node, options, locals)
     if kT == 'number' then
       --child content
       if vT == 'string' then
-        B[#B + 1] = options.preserve[tag] and v or (tag and options.indent or '') .. pad .. v
+        B[#B + 1] = options.preserve[tag] and v or pad .. v
       else
-        B[#B + 1] = _recurse(v, options, locals)
+        B[#B + 1] = _recurse(v, options, locals, lvl+1)
       end
     else
       --attribute
@@ -80,7 +81,7 @@ local function _recurse (node, options, locals)
               v[i] = format("'%s'", locals and locals[vv] or vv)
             end
           else
-            v[i] = _recurse(vv, options, locals)
+            v[i] = _recurse(vv, options, locals, lvl+1)
           end
         end
         if k == 'id' then
@@ -139,7 +140,7 @@ local function _recurse (node, options, locals)
 end
 
 local function render (dom, options, locals)
-  local html = _recurse(dom, options, locals)
+  local html = _recurse(dom, options, locals, 0)
   if locals then
     html = html:gsub('"#{(.-)}"', "'#{%1}'")
     local function interpolate_code (str)

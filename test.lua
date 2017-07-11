@@ -31,7 +31,10 @@ local json      = require 'json' or
   should add tests for this in your implementation's test rather than here.
 * optional: whether or not the test is optional
 --]]
-local f = assert(io.open('spec/tests.json','rb'))
+local path = arg[1] and arg[1] or 'spec/tests.json'
+local abort = arg[2]
+
+local f = assert(io.open(path,'rb'))
 local ctx = f:read("*a")
 f:close()
 
@@ -61,9 +64,12 @@ for k,test in pairs(j) do
     --]]
     if (html~=T.html ) then
       print('HAML:'..T.haml)
-      print('NEED:'..T.html)
-      print('BUT :'..html)
-      assert(nil)
+      print(string.format('NEED(%d):%s',#T.html,T.html))
+      print(string.format('BUT (%d):%s',#html,html))
+      if abort then
+        print('Fail')
+        return
+      end
     else
       print('OK')
     end
