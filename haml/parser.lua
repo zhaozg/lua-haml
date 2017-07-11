@@ -130,7 +130,7 @@ local nested_content = Cg(
       for _, line in ipairs(psplit(subject, "\n", index)) do
         if match(P" "^(num_spaces + 1), line) then
           insert(buffer, line)
-        elseif line == "" then
+        elseif line == "" or line == "\r" then
           insert(buffer, line)
         else
           break
