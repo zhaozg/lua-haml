@@ -114,30 +114,21 @@ local function flatten_ids_and_classes (t)
 end
 
 ---
-local function psplit(s, sep, index)
-  sep = lpeg.P(sep)
-  local elem = lpeg.C((1 - sep)^0)
-  local p = lpeg.Ct(elem * (sep * elem)^0)
-  return lpeg.match(p, s, index)
-end
-
 local nested_content = Cg(
   (Cmt(
     Cb "space",
     function (subject, index, spaces)
-      local buffer = {}
-      local num_spaces = tostring(spaces or ""):len()
-      for _, line in ipairs(psplit(subject, "\n", index)) do
-        if match(P" "^(num_spaces + 1), line) then
-          insert(buffer, line)
-        elseif line == "" or line == "\r" then
-          insert(buffer, line)
-        else
-          break
-        end
+      local normal = eol * inline_whitespace^(#spaces+1) * (P(1) - eol)^0
+      local empty = eol * #eol
+      local line = normal + empty
+      local nest =  (line^0)*Cp()
+      local off = match(nest, subject, index)
+
+      if off>index then
+        return off, subject:sub(index, off-1)
+      else
+        return off, ''
       end
-      buffer = concat(buffer, "\n")
-      return index + buffer:len(), buffer
     end)
   ),
   "content"
