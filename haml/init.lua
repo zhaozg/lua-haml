@@ -1,6 +1,7 @@
 local parser = require "haml.parser"
 local render = require "haml.render"
 local compile = require "haml.compile"
+local util = require "haml.util"
 
 local select = select
 local type = type
@@ -103,5 +104,7 @@ function M.render (haml_string, options, locals)
   end
   return render(compiled, options, locals)
 end
+
+M.print_r = util.print_r
 
 return M
