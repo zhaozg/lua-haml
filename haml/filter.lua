@@ -27,7 +27,7 @@ local function escape_html (str, escapes)
   return (str:gsub(pattern, escapes))
 end
 
-local function escaped_filter (node, options)
+local function escaped_filter (node, options, parent)
   local content = node.content
   local indent = (parent and parent.space) and node.space:sub(#parent.space+1) or node.space
   indent = #indent==0 and options.indent or indent
@@ -35,7 +35,7 @@ local function escaped_filter (node, options)
   return escape_html(content, options.html_escapes)
 end
 
-local function javascript_filter (node, options)
+local function javascript_filter (node, options, parent)
   local content = node.content
   local js = {}
   js.tag = {

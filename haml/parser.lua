@@ -136,8 +136,8 @@ local nested_content = Cg(
           break
         end
       end
-      local match = concat(buffer, "\n")
-      return index + match:len(), match
+      buffer = concat(buffer, "\n")
+      return index + buffer:len(), buffer
     end)
   ),
   "content"

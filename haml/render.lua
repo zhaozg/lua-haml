@@ -112,7 +112,9 @@ local function _recurse (node, options, locals, lvl)
     elseif #B == 0 then
       sort(A)
       if should_auto_close(tag, self_closing_modifier, inline_content, options) then
-        return options.format == 'xhtml' and format('%s<%s %s />', pad, tag, concat(A, ' ')) or format('%s<%s %s>', pad, tag, concat(A, ' '))
+        return options.format == 'xhtml'
+          and format('%s<%s %s />', pad, tag, concat(A, ' '))
+          or format('%s<%s %s>', pad, tag, concat(A, ' '))
       else
         return format('%s<%s %s>%s</%s>', pad, tag, concat(A, ' '), inline_content or '', tag)
       end
