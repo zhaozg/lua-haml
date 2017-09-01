@@ -143,20 +143,22 @@ end
 
 local function render (dom, options, locals)
   local html = _recurse(dom, options, locals, 0)
-  if locals then
-    html = html:gsub('"#{(.-)}"', "'#{%1}'")
-    local function interpolate_code (str)
-      return str:gsub('([\\]*)#{(.-)}', function (slashes, match)
-          if #slashes == 1 then
-            return '#{' .. match .. '}'
-          else
-            local val = locals and locals[match] or match
-            return slashes .. val
+  html = html:gsub('"#{(.-)}"', "'#{%1}'")
+  local function interpolate_code (str)
+    return str:gsub('([\\]*)#{(.-)}',
+      function (slashes, match)
+        if #slashes == 1 then
+          return '#{' .. match .. '}'
+        else
+          local val = locals and locals[match] or match
+          if options.lhtml then
+            return '<%='..val..'%>'
           end
-        end)
-    end
-    html = interpolate_code(html)
+          return slashes .. val
+        end
+      end)
   end
+  html = interpolate_code(html)
   return html:gsub('\\\\', '\\')
 end
 
