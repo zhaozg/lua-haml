@@ -4,7 +4,4 @@ docs
 *.swp
 coverage.html
 pkg
-/json.lua
-/lhtml.lua
-/reference.html
-/env.bat
+

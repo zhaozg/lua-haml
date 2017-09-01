@@ -1,0 +1,1483 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!-- saved from url=(0048) -->
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+<title>
+  File: REFERENCE
+  
+    — Haml Documentation
+  
+</title>
+<style>
+  body {
+  padding: 0 20px;
+  font-family: "Lucida Sans", "Lucida Grande", Verdana, Arial, sans-serif;
+  font-size: 13px;
+}
+body.frames { padding: 0 5px; }
+h1 { font-size: 25px; margin: 1em 0 0.5em; padding-top: 4px; border-top: 1px dotted #d5d5d5; }
+h1.noborder { border-top: 0px; margin-top: 0; padding-top: 4px; }
+h1.title { margin-bottom: 10px; }
+h1.alphaindex { margin-top: 0; font-size: 22px; }
+h2 {
+  padding: 0;
+  padding-bottom: 3px;
+  border-bottom: 1px #aaa solid;
+  font-size: 1.4em;
+  margin: 1.8em 0 0.5em;
+}
+h2 small { font-weight: normal; font-size: 0.7em; display: block; float: right; }
+.clear { clear: both; }
+.inline { display: inline; }
+.inline p:first-child { display: inline; }
+.docstring h1, .docstring h2, .docstring h3, .docstring h4 { padding: 0; border: 0; border-bottom: 1px dotted #bbb; }
+.docstring h1 { font-size: 1.2em; }
+.docstring h2 { font-size: 1.1em; }
+.docstring h3, .docstring h4 { font-size: 1em; border-bottom: 0; padding-top: 10px; }
+.summary_desc .object_link, .docstring .object_link { font-family: monospace; }
+.rdoc-term { padding-right: 25px; font-weight: bold; }
+.rdoc-list p { margin: 0; padding: 0; margin-bottom: 4px; }
+
+/* style for <table> */
+#filecontents table, .docstring table { border-collapse: collapse; }
+#filecontents table th, #filecontents table td,
+.docstring table th, .docstring table td { border: 1px solid #ccc; padding: 8px; padding-right: 17px; }
+#filecontents table tr:nth-child(odd),
+.docstring table tr:nth-child(odd) { background: #eee; }
+#filecontents table tr:nth-child(even),
+.docstring table tr:nth-child(even) { background: #fff; }
+#filecontents table th, .docstring table th { background: #fff; }
+
+/* style for <ul> */
+#filecontents li > p, .docstring li > p { margin: 0px; }
+#filecontents ul, .docstring ul { padding-left: 20px; }
+/* style for <dl> */
+#filecontents dl, .docstring dl { border: 1px solid #ccc; }
+#filecontents dt, .docstring dt { background: #ddd; font-weight: bold; padding: 3px 5px; }
+#filecontents dd, .docstring dd { padding: 5px 0px; margin-left: 18px; }
+#filecontents dd > p, .docstring dd > p { margin: 0px; }
+
+.note {
+  color: #222;
+  -moz-border-radius: 3px; -webkit-border-radius: 3px;
+  background: #e3e4e3; border: 1px solid #d5d5d5; padding: 7px 10px;
+  display: block;
+}
+.note.todo { background: #ffffc5; border-color: #ececaa; }
+.note.returns_void { background: #efefef; }
+.note.deprecated { background: #ffe5e5; border-color: #e9dada; }
+.note.private { background: #ffffc5; border-color: #ececaa; }
+.note.title { padding: 1px 5px; font-size: 0.9em; font-family: "Lucida Sans", "Lucida Grande", Verdana, Arial, sans-serif; display: inline; }
+.summary_signature + .note.title { margin-left: 7px; }
+h1 .note.title { font-size: 0.5em; font-weight: normal; padding: 3px 5px; position: relative; top: -3px; text-transform: capitalize; }
+.note.title.constructor { color: #fff; background: #6a98d6; border-color: #6689d6; }
+.note.title.writeonly { color: #fff; background: #45a638; border-color: #2da31d; }
+.note.title.readonly { color: #fff; background: #6a98d6; border-color: #6689d6; }
+.note.title.private { background: #d5d5d5; border-color: #c5c5c5; }
+.note.title.not_defined_here { background: transparent; border: none; font-style: italic; }
+.discussion .note { margin-top: 6px; }
+.discussion .note:first-child { margin-top: 0; }
+
+h3.inherited {
+  font-style: italic;
+  font-family: "Lucida Sans", "Lucida Grande", Verdana, Arial, sans-serif;
+  font-weight: normal;
+  padding: 0;
+  margin: 0;
+  margin-top: 12px;
+  margin-bottom: 3px;
+  font-size: 13px;
+}
+p.inherited {
+  padding: 0;
+  margin: 0;
+  margin-left: 25px;
+}
+
+#filecontents dl.box, dl.box {
+  border: 0;
+  width: 520px;
+  font-size: 1em;
+}
+#filecontents dl.box dt, dl.box dt {
+  float: left;
+  display: block;
+  width: 100px;
+  margin: 0;
+  text-align: right;
+  font-weight: bold;
+  background: transparent;
+  border: 1px solid #aaa;
+  border-width: 1px 0px 0px 1px;
+  padding: 6px 0;
+  padding-right: 10px;
+}
+#filecontents dl.box dd, dl.box dd {
+  float: left;
+  display: block;
+  width: 380px;
+  margin: 0;
+  padding: 6px 0;
+  padding-right: 20px;
+  border: 1px solid #aaa;
+  border-width: 1px 1px 0 0;
+}
+#filecontents dl.box .last, dl.box .last {
+  border-bottom: 1px solid #aaa;
+}
+#filecontents dl.box .r1, dl.box .r1 { background: #eee; }
+
+ul.toplevel { list-style: none; padding-left: 0; font-size: 1.1em; }
+.index_inline_list { padding-left: 0; font-size: 1.1em; }
+.index_inline_list li { list-style: none; display: inline; padding: 7px 12px; line-height: 35px; }
+
+dl.constants { margin-left: 40px; }
+dl.constants dt { font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
+dl.constants dd { width: 75%; white-space: pre; font-family: monospace; margin-bottom: 18px; }
+
+.summary_desc { margin-left: 32px; display: block; font-family: sans-serif; }
+.summary_desc tt { font-size: 0.9em; }
+dl.constants .note { padding: 2px 6px; padding-right: 12px; margin-top: 6px; }
+dl.constants .docstring { margin-left: 32px; font-size: 0.9em; font-weight: normal; }
+dl.constants .tags { padding-left: 32px; font-size: 0.9em; line-height: 0.8em; }
+dl.constants .discussion *:first-child { margin-top: 0; }
+dl.constants .discussion *:last-child { margin-bottom: 0; }
+
+.method_details { border-top: 1px dotted #aaa; margin-top: 15px; padding-top: 0; }
+.method_details.first { border: 0; }
+p.signature, h3.signature {
+  font-size: 1.1em; font-weight: normal; font-family: Monaco, Consolas, Courier, monospace;
+  padding: 6px 10px; margin-top: 18px;
+  background: #e5e8ff; border: 1px solid #d8d8e5; -moz-border-radius: 3px; -webkit-border-radius: 3px;
+}
+p.signature tt,
+h3.signature tt { font-family: Monaco, Consolas, Courier, monospace; }
+p.signature .overload,
+h3.signature .overload { display: block; }
+p.signature .extras,
+h3.signature .extras { font-weight: normal; font-family: sans-serif; color: #444; font-size: 1em; }
+p.signature .not_defined_here,
+h3.signature .not_defined_here,
+p.signature .aliases,
+h3.signature .aliases { display: block; font-weight: normal; font-size: 0.9em; font-family: sans-serif; margin-top: 0px; color: #555; }
+p.signature .aliases .names,
+h3.signature .aliases .names { font-family: Monaco, Consolas, Courier, monospace; font-weight: bold; color: #000; font-size: 1.2em; }
+
+.tags .tag_title { font-size: 1em; margin-bottom: 0; font-weight: bold; }
+.tags ul { margin-top: 5px; padding-left: 30px; list-style: square; }
+.tags ul li { margin-bottom: 3px; }
+.tags ul .name { font-family: monospace; font-weight: bold; }
+.tags ul .note { padding: 3px 6px; }
+.tags { margin-bottom: 12px; }
+
+.tags .examples .tag_title { margin-bottom: 10px; font-weight: bold; }
+.tags .examples .inline p { padding: 0; margin: 0; margin-left: 15px; font-weight: bold; font-size: 0.9em; }
+
+.tags .overload .overload_item { list-style: none; margin-bottom: 25px; }
+.tags .overload .overload_item .signature {
+  padding: 2px 8px;
+  background: #e5e8ff; border: 1px solid #d8d8e5; -moz-border-radius: 3px; -webkit-border-radius: 3px;
+}
+.tags .overload .signature { margin-left: -15px; font-family: monospace; display: block; font-size: 1.1em; }
+.tags .overload .docstring { margin-top: 15px; }
+
+.defines { display: none; }
+
+#method_missing_details .notice.this { position: relative; top: -8px; color: #888; padding: 0; margin: 0; }
+
+.showSource { font-size: 0.9em; }
+.showSource a:link, .showSource a:visited { text-decoration: none; color: #666; }
+
+#content a:link, #content a:visited { text-decoration: none; color: #05a; }
+#content a:hover { background: #ffffa5; }
+div.docstring, p.docstring { margin-right: 6em; }
+
+ul.summary {
+  list-style: none;
+  font-family: monospace;
+  font-size: 1em;
+  line-height: 1.5em;
+}
+ul.summary a:link, ul.summary a:visited {
+  text-decoration: none; font-size: 1.1em;
+}
+ul.summary li { margin-bottom: 5px; }
+.summary .summary_signature {
+  padding: 1px 10px;
+  background: #eaeaff; border: 1px solid #dfdfe5;
+  -moz-border-radius: 3px; -webkit-border-radius: 3px;
+}
+.summary_signature:hover { background: #eeeeff; cursor: pointer; }
+ul.summary.compact li { display: inline-block; margin: 0px 5px 0px 0px; line-height: 2.6em;}
+ul.summary.compact .summary_signature { padding: 5px 7px; padding-right: 4px; }
+#content .summary_signature:hover a:link,
+#content .summary_signature:hover a:visited {
+  background: transparent;
+  color: #48f;
+}
+
+p.inherited a { font-family: monospace; font-size: 0.9em; }
+p.inherited { word-spacing: 5px; font-size: 1.2em; }
+
+p.children { font-size: 1.2em; }
+p.children a { font-size: 0.9em; }
+p.children strong { font-size: 0.8em; }
+p.children strong.modules { padding-left: 5px; }
+
+ul.fullTree { display: none; padding-left: 0; list-style: none; margin-left: 0; margin-bottom: 10px; }
+ul.fullTree ul { margin-left: 0; padding-left: 0; list-style: none; }
+ul.fullTree li { text-align: center; padding-top: 18px; padding-bottom: 12px; background: url(data:image/gif;base64,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) no-repeat top center; }
+ul.fullTree li:first-child { padding-top: 0; background: transparent; }
+ul.fullTree li:last-child { padding-bottom: 0; }
+.showAll ul.fullTree { display: block; }
+.showAll .inheritName { display: none; }
+
+#search { position: absolute; right: 14px; top: 0px; }
+#search a:link, #search a:visited {
+  display: block; float: left; margin-right: 4px;
+  padding: 8px 10px; text-decoration: none; color: #05a;
+  border: 1px solid #d8d8e5;
+  -moz-border-radius-bottomleft: 3px; -moz-border-radius-bottomright: 3px;
+  -webkit-border-bottom-left-radius: 3px; -webkit-border-bottom-right-radius: 3px;
+  background: #eaf0ff;
+  -webkit-box-shadow: -1px 1px 3px #ddd;
+}
+#search a:hover { background: #f5faff; color: #06b; }
+#search a.active {
+  background: #568; padding-bottom: 20px; color: #fff; border: 1px solid #457;
+  -moz-border-radius-topleft: 5px; -moz-border-radius-topright: 5px;
+  -webkit-border-top-left-radius: 5px; -webkit-border-top-right-radius: 5px;
+}
+#search a.inactive { color: #999; }
+.frames #search { display: none; }
+.inheritanceTree, .toggleDefines { float: right; }
+
+#menu { font-size: 1.3em; color: #bbb; top: -5px; position: relative; }
+#menu .title, #menu a { font-size: 0.7em; }
+#menu .title a { font-size: 1em; }
+#menu .title { color: #555; }
+#menu a:link, #menu a:visited { color: #333; text-decoration: none; border-bottom: 1px dotted #bbd; }
+#menu a:hover { color: #05a; }
+#menu .noframes { display: inline; }
+.frames #menu .noframes { display: inline; float: right; }
+
+#footer { margin-top: 15px; border-top: 1px solid #ccc; text-align: center; padding: 7px 0; color: #999; }
+#footer a:link, #footer a:visited { color: #444; text-decoration: none; border-bottom: 1px dotted #bbd; }
+#footer a:hover { color: #05a; }
+
+#listing ul.alpha { font-size: 1.1em; }
+#listing ul.alpha { margin: 0; padding: 0; padding-bottom: 10px; list-style: none; }
+#listing ul.alpha li.letter { font-size: 1.4em; padding-bottom: 10px; }
+#listing ul.alpha ul { margin: 0; padding-left: 15px; }
+#listing ul small { color: #666; font-size: 0.7em; }
+
+li.r1 { background: #f0f0f0; }
+li.r2 { background: #fafafa; }
+
+#search_frame {
+  z-index: 9999;
+  background: #fff;
+  display: none;
+  position: absolute;
+  top: 36px;
+  right: 18px;
+  width: 500px;
+  height: 80%;
+  overflow-y: scroll;
+  border: 1px solid #999;
+  border-collapse: collapse;
+  -webkit-box-shadow: -7px 5px 25px #aaa;
+  -moz-box-shadow: -7px 5px 25px #aaa;
+  -moz-border-radius: 2px;
+  -webkit-border-radius: 2px;
+}
+
+#content ul.summary li.deprecated .summary_signature a:link,
+#content ul.summary li.deprecated .summary_signature a:visited { text-decoration: line-through; font-style: italic; }
+
+#toc {
+  padding: 20px; padding-right: 30px; border: 1px solid #ddd; float: right; background: #fff; margin-left: 20px; margin-bottom: 20px;
+  max-width: 300px;
+  -webkit-box-shadow: -2px 2px 6px #bbb;
+  -moz-box-shadow: -2px 2px 6px #bbb;
+  z-index: 5000;
+  position: relative;
+  overflow-x: auto;
+}
+#toc.nofloat { float: none; max-width: none; border: none; padding: 0; margin: 20px 0; -webkit-box-shadow: none; -moz-box-shadow: none; }
+#toc.nofloat.hidden { padding: 0; background: 0; margin-bottom: 5px; }
+#toc .title { margin: 0; }
+#toc ol { padding-left: 1.8em; }
+#toc li { font-size: 1.1em; line-height: 1.7em; }
+#toc > ol > li { font-size: 1.1em; font-weight: bold; }
+#toc ol > ol { font-size: 0.9em; }
+#toc ol ol > ol { padding-left: 2.3em; }
+#toc ol + li { margin-top: 0.3em; }
+#toc.hidden { padding: 10px; background: #f6f6f6; -webkit-box-shadow: none; -moz-box-shadow: none; }
+#filecontents h1 + #toc.nofloat { margin-top: 0; }
+
+/* syntax highlighting */
+.source_code { display: none; padding: 3px 8px; border-left: 8px solid #ddd; margin-top: 5px; }
+#filecontents pre.code, .docstring pre.code, .source_code pre { font-family: monospace; }
+#filecontents pre.code, .docstring pre.code { display: block; }
+.source_code .lines { padding-right: 12px; color: #555; text-align: right; }
+#filecontents pre.code, .docstring pre.code,
+.tags pre.example { padding: 5px 12px; margin-top: 4px; border: 1px solid #eef; background: #f5f5ff; }
+pre.code { color: #000; }
+pre.code .info.file { color: #555; }
+pre.code .val { color: #036A07; }
+pre.code .tstring_content,
+pre.code .heredoc_beg, pre.code .heredoc_end,
+pre.code .qwords_beg, pre.code .qwords_end,
+pre.code .tstring, pre.code .dstring { color: #036A07; }
+pre.code .fid, pre.code .rubyid_new, pre.code .rubyid_to_s,
+pre.code .rubyid_to_sym, pre.code .rubyid_to_f,
+pre.code .dot + pre.code .id,
+pre.code .rubyid_to_i pre.code .rubyid_each { color: #0085FF; }
+pre.code .comment { color: #0066FF; }
+pre.code .const, pre.code .constant { color: #585CF6; }
+pre.code .label,
+pre.code .symbol { color: #C5060B; }
+pre.code .kw,
+pre.code .rubyid_require,
+pre.code .rubyid_extend,
+pre.code .rubyid_include { color: #0000FF; }
+pre.code .ivar { color: #318495; }
+pre.code .gvar,
+pre.code .rubyid_backref,
+pre.code .rubyid_nth_ref { color: #6D79DE; }
+pre.code .regexp, .dregexp { color: #036A07; }
+pre.code a { border-bottom: 1px dotted #bbf; }
+
+</style>
+  <link rel="stylesheet" href="./haml_files/style.css" type="text/css" charset="utf-8">
+
+  <link rel="stylesheet" href="./haml_files/common.css" type="text/css" charset="utf-8">
+
+  </head>
+  <body>
+    <div id="header">
+      <div id="menu">
+  
+    <a href="http://haml.info/docs/yardoc/_index.html">Index</a> » 
+    <span class="title">File: REFERENCE</span>
+  
+
+  <div class="noframes"><span class="title">(</span><a href="#!file.REFERENCE.html" target="_top">frames</a><span class="title">)</span></div>
+</div>
+
+      <div class="clear"></div>
+    </div>
+
+    <iframe id="search_frame"></iframe>
+
+    <div id="content"><div id="toc"><p class="title"><a class="hide_toc" href="#"><strong>Table of Contents</strong></a> <small>(<a href="#" class="float_toc">left</a>)</small></p><ol class="top"><li><a href="#features">Features</a></li><li><a href="#using_haml">Using Haml</a></li><ol><li><a href="#rails_xss_protection">Rails XSS Protection</a></li><li><a href="#ruby_module">Ruby Module</a></li><li><a href="#options">Options</a></li><li><a href="#encodings">Encodings</a></li></ol><li><a href="#plain_text">Plain Text</a></li><ol><li><a href="#escaping_">Escaping: \</a></li></ol><li><a href="#html_elements">HTML Elements</a></li><ol><li><a href="#element_name_">Element Name: %</a></li><li><a href="#attributes_">Attributes: `</a></li><ol><li><a href="#class-and-id-attributes">:class and :id Attributes</a></li><li><a href="#htmlstyle_attributes_">HTML-style Attributes: ()</a></li><li><a href="#ruby_19style_hashes">Ruby 1.9-style Hashes</a></li><li><a href="#attribute_methods">Attribute Methods</a></li><li><a href="#boolean_attributes">Boolean Attributes</a></li><li><a href="#html5_custom_data_attributes">HTML5 Custom Data Attributes</a></li></ol><li><a href="#class_and_id__and_">Class and ID: . and #</a></li><ol><li><a href="#implicit_div_elements">Implicit Div Elements</a></li></ol><li><a href="#empty_void_tags_">Empty (void) Tags: /</a></li><li><a href="#whitespace_removal__and_">Whitespace Removal: &gt; and &lt;</a></li><li><a href="#object_reference_">Object Reference: []</a></li></ol><li><a href="#doctype_">Doctype: !!!</a></li><li><a href="#comments">Comments</a></li><ol><li><a href="#html_comments_">HTML Comments: /</a></li><ol><li><a href="#conditional_comments_">Conditional Comments: /[]</a></li></ol><li><a href="#haml_comments_">Haml Comments: -#</a></li></ol><li><a href="#ruby_evaluation">Ruby Evaluation</a></li><ol><li><a href="#inserting_ruby_">Inserting Ruby: =</a></li><li><a href="#running_ruby_">Running Ruby: -</a></li><ol><li><a href="#ruby_blocks">Ruby Blocks</a></li></ol><li><a href="#tilde">Whitespace Preservation: ~</a></li><li><a href="#ruby_interpolation_">Ruby Interpolation: #{}</a></li><li><a href="#escaping_html">Escaping HTML: &amp;=</a></li><li><a href="#unescaping_html">Unescaping HTML: !=</a></li></ol><li><a href="#filters">Filters</a></li><ol><li><a href="#cdata-filter">:cdata</a></li><li><a href="#coffee-filter">:coffee</a></li><li><a href="#css-filter">:css</a></li><li><a href="#erb-filter">:erb</a></li><li><a href="#escaped-filter">:escaped</a></li><li><a href="#javascript-filter">:javascript</a></li><li><a href="#less-filter">:less</a></li><li><a href="#markdown-filter">:markdown</a></li><li><a href="#maruku-filter">:maruku</a></li><li><a href="#plain-filter">:plain</a></li><li><a href="#preserve-filter">:preserve</a></li><li><a href="#ruby-filter">:ruby</a></li><li><a href="#sass-filter">:sass</a></li><li><a href="#scss-filter">:scss</a></li><li><a href="#textile-filter">:textile</a></li><li><a href="#custom_filters">Custom Filters</a></li></ol><li><a href="#helper-methods">Helper Methods</a></li><ol><li><a href="#surround">surround</a></li><li><a href="#precede">precede</a></li><li><a href="#succeed">succeed</a></li></ol><li><a href="#multiline">Multiline: |</a></li><li><a href="#whitespace_preservation">Whitespace Preservation</a></li><li><a href="#helpers">Helpers</a></li></ol></div><div id="filecontents">
+<h1 id="haml_html_abstraction_markup_language">Haml (HTML Abstraction Markup Language)</h1>
+
+<p>Haml is a markup language that’s used to cleanly and simply describe the HTML of any web document, without the use of inline code. Haml functions as a replacement for inline page templating systems such as PHP, ERB, and ASP. However, Haml avoids the need for explicitly coding HTML into the template, because it is actually an abstract description of the HTML, with some code to generate dynamic content.</p>
+
+<h2 id="features">Features</h2>
+
+<ul>
+<li>Whitespace active</li>
+
+<li>Well-formatted markup</li>
+
+<li>DRY</li>
+
+<li>Follows CSS conventions</li>
+
+<li>Integrates Ruby code</li>
+
+<li>Implements Rails templates with the .haml extension</li>
+</ul>
+
+<h2 id="using_haml">Using Haml</h2>
+
+<p>Haml can be used in three ways:</p>
+
+<ul>
+<li>as a command-line tool,</li>
+
+<li>as a plugin for Ruby on Rails,</li>
+
+<li>and as a standalone Ruby module.</li>
+</ul>
+
+<p>The first step for all of these is to install the Haml gem:</p>
+
+<pre class="code ruby"><code class="ruby">gem install haml</code></pre>
+
+<p>To run Haml from the command line, just use</p>
+
+<pre class="code ruby"><code class="ruby">haml input.haml output.html</code></pre>
+
+<p>Use <code>haml --help</code> for full documentation.</p>
+
+<p>To use Haml with Rails, add the following line to the Gemfile:</p>
+
+<pre class="code ruby"><code class="ruby">gem "haml"</code></pre>
+
+<p>Once it’s installed, all view files with the <code>".html.haml"</code> extension will be compiled using Haml.</p>
+
+<p>You can access instance variables in Haml templates the same way you do in ERB templates. Helper methods are also available in Haml templates. For example:</p>
+
+<pre class="code ruby"><code class="ruby"># file: app/controllers/movies_controller.rb
+
+class MoviesController &lt; ApplicationController
+  def index
+    @title = "Teen Wolf"
+  end
+end
+
+-# file: app/views/movies/index.html.haml
+
+#content
+ .title
+   %h1= @title
+   = link_to 'Home', home_url</code></pre>
+
+<p>may be compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div id='content'&gt;
+  &lt;div class='title'&gt;
+    &lt;h1&gt;Teen Wolf&lt;/h1&gt;
+    &lt;a href='/'&gt;Home&lt;/a&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+
+<h3 id="rails_xss_protection">Rails XSS Protection</h3>
+
+<p>Haml supports Rails’ XSS protection scheme, which was introduced in Rails 2.3.5+ and is enabled by default in 3.0.0+. If it’s enabled, Haml’s <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#escape_html-instance_method" title="Haml::Options#escape_html (method)"><code>:escape_html</code></a></span> option is set to <code>true</code> by default - like in ERB, all strings printed to a Haml template are escaped by default. Also like ERB, strings marked as HTML safe are not escaped. Haml also has <a href="#unescaping_html">its own syntax for printing a raw string to the template</a>.</p>
+
+<p>If the <code>:escape_html</code> option is set to false when XSS protection is enabled, Haml doesn’t escape Ruby strings by default. However, if a string marked HTML-safe is passed to <a href="#escaping_html">Haml’s escaping syntax</a>, it won’t be escaped.</p>
+
+<p>Finally, all the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Helpers.html" title="Haml::Helpers (module)">Haml helpers</a></span> that return strings that are known to be HTML safe are marked as such. In addition, string input is escaped unless it’s HTML safe.</p>
+
+<h3 id="ruby_module">Ruby Module</h3>
+
+<p>Haml can also be used completely separately from Rails and ActionView. To do this, install the gem with RubyGems:</p>
+
+<pre class="code ruby"><code class="ruby">gem install haml</code></pre>
+
+<p>You can then use it by including the “haml” gem in Ruby code, and using <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Engine.html" title="Haml::Engine (class)">Haml::Engine</a></span> like so:</p>
+
+<pre class="code ruby"><code class="ruby">engine = Haml::Engine.new("%p Haml code!")
+engine.render #=&gt; "&lt;p&gt;Haml code!&lt;/p&gt;\n"</code></pre>
+
+<h3 id="options">Options</h3>
+
+<p>Haml understands various configuration options that affect its performance and output.</p>
+
+<p>In Rails, options can be set by setting the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Template.html#options-instance_method" title="Haml::Template#options (method)">Haml::Template.options</a></span> hash in an initializer:</p>
+
+<pre class="code ruby"><code class="ruby"># config/initializers/haml.rb
+Haml::Template.options[:format] = :html5</code></pre>
+
+<p>Outside Rails, you can set them by configuring them globally in Haml::Options.defaults:</p>
+
+<pre class="code ruby"><code class="ruby">Haml::Options.defaults[:format] = :html5</code></pre>
+
+<p>Finally, you can also set them by passing an options hash to <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Engine.html#initialize-instance_method" title="Haml::Engine#initialize (method)">Haml::Engine#initialize</a></span>. For the complete list of available options, please see <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html" title="Haml::Options (class)">Haml::Options</a></span>.</p>
+
+<h3 id="encodings">Encodings</h3>
+
+<p>When using Ruby 1.9 or later, Haml supports the same sorts of encoding-declaration comments that Ruby does. Although both Ruby and Haml support several different styles, the easiest it just to add <code>-# coding:
+encoding-name</code> at the beginning of the Haml template (it must come before all other lines). This will tell Haml that the template is encoded using the named encoding.</p>
+
+<p>By default, the HTML generated by Haml has the same encoding as the Haml template. However, if <code>Encoding.default_internal</code> is set, Haml will attempt to use that instead. In addition, the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#encoding-instance_method" title="Haml::Options#encoding (method)"><code>:encoding</code> option</a></span> can be used to specify an output encoding manually.</p>
+
+<p>Note that, like Ruby, Haml does not support templates encoded in UTF-16 or UTF-32, since these encodings are not compatible with ASCII. It is possible to use these as the output encoding, though.</p>
+
+<h2 id="plain_text">Plain Text</h2>
+
+<p>A substantial portion of any HTML document is its content, which is plain old text. Any Haml line that’s not interpreted as something else is taken to be plain text, and passed through unmodified. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%gee
+  %whiz
+    Wow this is cool!</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;gee&gt;
+  &lt;whiz&gt;
+    Wow this is cool!
+  &lt;/whiz&gt;
+&lt;/gee&gt;</code></pre>
+
+<p>Note that HTML tags are passed through unmodified as well. If you have some HTML you don’t want to convert to Haml, or you’re converting a file line-by-line, you can just include it as-is. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%p
+  &lt;div id="blah"&gt;Blah!&lt;/div&gt;</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;
+  &lt;div id="blah"&gt;Blah!&lt;/div&gt;
+&lt;/p&gt;</code></pre>
+
+<h3 id="escaping_">Escaping: <code>\</code></h3>
+
+<p>The backslash character escapes the first character of a line, allowing use of otherwise interpreted characters as plain text. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%title
+  = @title
+  \= @title</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;title&gt;
+  MyPage
+  = @title
+&lt;/title&gt;</code></pre>
+
+<h2 id="html_elements">HTML Elements</h2>
+
+<h3 id="element_name_">Element Name: <code>%</code></h3>
+
+<p>The percent character is placed at the beginning of a line. It’s followed immediately by the name of an element, then optionally by modifiers (see below), a space, and text to be rendered inside the element. It creates an element in the form of <code>&lt;element&gt;&lt;/element&gt;</code>. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%one
+  %two
+    %three Hey there</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;one&gt;
+  &lt;two&gt;
+    &lt;three&gt;Hey there&lt;/three&gt;
+  &lt;/two&gt;
+&lt;/one&gt;</code></pre>
+
+<p>Any string is a valid element name; Haml will automatically generate opening and closing tags for any element.</p>
+
+<h3 id="attributes_">Attributes: `</h3>
+
+<p>Brackets represent a Ruby hash that is used for specifying the attributes of an element. It is literally evaluated as a Ruby hash, so logic will work in it and local variables may be used. Quote characters within the attribute will be replaced by appropriate escape sequences. The hash is placed after the tag is defined. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%html{:xmlns =&gt; "http://www.w3.org/1999/xhtml", "xml:lang" =&gt; "en", :lang =&gt; "en"}</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='en'&gt;&lt;/html&gt;</code></pre>
+
+<p>Attribute hashes can also be stretched out over multiple lines to accommodate many attributes. However, newlines may only be placed immediately after commas. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%script{:type =&gt; "text/javascript",
+        :src  =&gt; "javascripts/script_#{2 + 7}"}</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;script src='javascripts/script_9' type='text/javascript'&gt;&lt;/script&gt;</code></pre>
+
+<h4 id="class-and-id-attributes"><code>:class</code> and <code>:id</code> Attributes</h4>
+
+<p>The <code>:class</code> and <code>:id</code> attributes can also be specified as a Ruby array whose elements will be joined together. A <code>:class</code> array is joined with <code>" "</code> and an <code>:id</code> array is joined with <code>"_"</code>. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%div{:id =&gt; [@item.type, @item.number], :class =&gt; [@item.type, @item.urgency]}</code></pre>
+
+<p>is equivalent to:</p>
+
+<pre class="code ruby"><code class="ruby">%div{:id =&gt; "#{@item.type}_#{@item.number}", :class =&gt; "#{@item.type} #{@item.urgency}"}</code></pre>
+
+<p>The array will first be flattened and any elements that do not test as true will be removed. The remaining elements will be converted to strings. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%div{:class =&gt; [@item.type, @item == @sortcol &amp;&amp; [:sort, @sortdir]] } Contents</code></pre>
+
+<p>could render as any of:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div class="numeric sort ascending"&gt;Contents&lt;/div&gt;
+&lt;div class="numeric"&gt;Contents&lt;/div&gt;
+&lt;div class="sort descending"&gt;Contents&lt;/div&gt;
+&lt;div&gt;Contents&lt;/div&gt;</code></pre>
+
+<p>depending on whether <code>@item.type</code> is <code>"numeric"</code> or <code>nil</code>, whether <code>@item == @sortcol</code>, and whether <code>@sortdir</code> is <code>"ascending"</code> or <code>"descending"</code>.</p>
+
+<p>If a single value is specified and it evaluates to false it is ignored; otherwise it gets converted to a string. For example:</p>
+
+<pre class="code ruby"><code class="ruby">.item{:class =&gt; @item.is_empty? &amp;&amp; "empty"}</code></pre>
+
+<p>could render as either of:</p>
+
+<pre class="code ruby"><code class="ruby">class="item"
+class="item empty"</code></pre>
+
+<h4 id="htmlstyle_attributes_">HTML-style Attributes: <code>()</code></h4>
+
+<p>Haml also supports a terser, less Ruby-specific attribute syntax based on HTML’s attributes. These are used with parentheses instead of brackets, like so:</p>
+
+<pre class="code ruby"><code class="ruby">%html(xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en")</code></pre>
+
+<p>Ruby variables can be used by omitting the quotes. Local variables or instance variables can be used. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%a(title=@title href=href) Stuff</code></pre>
+
+<p>This is the same as:</p>
+
+<pre class="code ruby"><code class="ruby">%a{:title =&gt; @title, :href =&gt; href} Stuff</code></pre>
+
+<p>Because there are no commas separating attributes, though, more complicated expressions aren’t allowed. For those you’ll have to use the <code>{}</code> syntax. You can, however, use both syntaxes together:</p>
+
+<pre class="code ruby"><code class="ruby">%a(title=@title){:href =&gt; @link.href} Stuff</code></pre>
+
+<p>You can also use <code>#{}</code> interpolation to insert complicated expressions in a HTML-style attribute:</p>
+
+<pre class="code ruby"><code class="ruby">%span(class="widget_#{@widget.number}")</code></pre>
+
+<p>HTML-style attributes can be stretched across multiple lines just like hash-style attributes:</p>
+
+<pre class="code ruby"><code class="ruby">%script(type="text/javascript"
+        src="javascripts/script_#{2 + 7}")</code></pre>
+
+<h4 id="ruby_19style_hashes">Ruby 1.9-style Hashes</h4>
+
+<p>On Ruby 1.9, Haml also supports Ruby’s new hash syntax:</p>
+
+<pre class="code ruby"><code class="ruby">%a{title: @title, href: href} Stuff</code></pre>
+
+<h4 id="attribute_methods">Attribute Methods</h4>
+
+<p>A Ruby method call that returns a hash can be substituted for the hash contents. For example, <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Helpers.html" title="Haml::Helpers (module)">Haml::Helpers</a></span> defines the following method:</p>
+
+<pre class="code ruby"><code class="ruby">def html_attrs(lang = 'en-US')
+  {:xmlns =&gt; "http://www.w3.org/1999/xhtml", 'xml:lang' =&gt; lang, :lang =&gt; lang}
+end</code></pre>
+
+<p>This can then be used in Haml, like so:</p>
+
+<pre class="code ruby"><code class="ruby">%html{html_attrs('fr-fr')}</code></pre>
+
+<p>This is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;html lang='fr-fr' xml:lang='fr-fr' xmlns='http://www.w3.org/1999/xhtml'&gt;
+&lt;/html&gt;</code></pre>
+
+<p>You can use as many such attribute methods as you want by separating them with commas, like a Ruby argument list. All the hashes will me merged together, from left to right. For example, if you defined</p>
+
+<pre class="code ruby"><code class="ruby">def hash1
+  {:bread =&gt; 'white', :filling =&gt; 'peanut butter and jelly'}
+end
+
+def hash2
+  {:bread =&gt; 'whole wheat'}
+end</code></pre>
+
+<p>then</p>
+
+<pre class="code ruby"><code class="ruby">%sandwich{hash1, hash2, :delicious =&gt; 'true'}/</code></pre>
+
+<p>would compile to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;sandwich bread='whole wheat' delicious='true' filling='peanut butter and jelly' /&gt;</code></pre>
+
+<p>Note that the Haml attributes list has the same syntax as a Ruby method call. This means that any attribute methods must come before the hash literal.</p>
+
+<p>Attribute methods aren’t supported for HTML-style attributes.</p>
+
+<h4 id="boolean_attributes">Boolean Attributes</h4>
+
+<p>Some attributes, such as “checked” for <code>input</code> tags or “selected” for <code>option</code> tags, are “boolean” in the sense that their values don’t matter - it only matters whether or not they’re present. In HTML (but not XHTML), these attributes can be written as</p>
+
+<pre class="code ruby"><code class="ruby">&lt;input selected&gt;</code></pre>
+
+<p>To do this in Haml using hash-style attributes, just assign a Ruby <code>true</code> value to the attribute:</p>
+
+<pre class="code ruby"><code class="ruby">%input{:selected =&gt; true}</code></pre>
+
+<p>In XHTML, the only valid value for these attributes is the name of the attribute. Thus this will render in XHTML as</p>
+
+<pre class="code ruby"><code class="ruby">&lt;input selected='selected'&gt;</code></pre>
+
+<p>To set these attributes to false, simply assign them to a Ruby false value. In both XHTML and HTML,</p>
+
+<pre class="code ruby"><code class="ruby">%input{:selected =&gt; false}</code></pre>
+
+<p>will just render as:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;input&gt;</code></pre>
+
+<p>HTML-style boolean attributes can be written just like HTML:</p>
+
+<pre class="code ruby"><code class="ruby">%input(selected)</code></pre>
+
+<p>or using <code>true</code> and <code>false</code>:</p>
+
+<pre class="code ruby"><code class="ruby">%input(selected=true)</code></pre>
+
+<h4 id="html5_custom_data_attributes">HTML5 Custom Data Attributes</h4>
+
+<p>HTML5 allows for adding <a href="http://www.whatwg.org/specs/web-apps/current-work/multipage/elements.html#embedding-custom-non-visible-data" target="_parent">custom non-visible data attributes</a> to elements using attribute names beginning with <code>data-</code>. Custom data attributes can be used in Haml by using the key <code>:data</code> with a Hash value in an attribute hash. Each of the key/value pairs in the Hash will be transformed into a custom data attribute. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%a{:href=&gt;"/posts", :data =&gt; {:author_id =&gt; 123}} Posts By Author</code></pre>
+
+<p>will render as:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;a data-author-id='123' href='/posts'&gt;Posts By Author&lt;/a&gt;</code></pre>
+
+<p>Notice that the underscore in <code>author_id</code> was replaced by a hyphen. If you wish to suppress this behavior, you can set Haml’s <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#hyphenate_data_attrs-instance_method" title="Haml::Options#hyphenate_data_attrs (method)"><code>:hyphenate_data_attrs</code> option</a></span> to <code>false</code>, and the output will be rendered as:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;a data-author_id='123' href='/posts'&gt;Posts By Author&lt;/a&gt;</code></pre>
+
+<h3 id="class_and_id__and_">Class and ID: <code>.</code> and <code>#</code></h3>
+
+<p>The period and pound sign are borrowed from CSS. They are used as shortcuts to specify the <code>class</code> and <code>id</code> attributes of an element, respectively. Multiple class names can be specified in a similar way to CSS, by chaining the class names together with periods. They are placed immediately after the tag and before an attributes hash. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%div#things
+  %span#rice Chicken Fried
+  %p.beans{ :food =&gt; 'true' } The magical fruit
+  %h1.class.otherclass#id La La La</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div id='things'&gt;
+  &lt;span id='rice'&gt;Chicken Fried&lt;/span&gt;
+  &lt;p class='beans' food='true'&gt;The magical fruit&lt;/p&gt;
+  &lt;h1 class='class otherclass' id='id'&gt;La La La&lt;/h1&gt;
+&lt;/div&gt;</code></pre>
+
+<p>And,</p>
+
+<pre class="code ruby"><code class="ruby">%div#content
+  %div.articles
+    %div.article.title Doogie Howser Comes Out
+    %div.article.date 2006-11-05
+    %div.article.entry
+      Neil Patrick Harris would like to dispel any rumors that he is straight</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div id='content'&gt;
+  &lt;div class='articles'&gt;
+    &lt;div class='article title'&gt;Doogie Howser Comes Out&lt;/div&gt;
+    &lt;div class='article date'&gt;2006-11-05&lt;/div&gt;
+    &lt;div class='article entry'&gt;
+      Neil Patrick Harris would like to dispel any rumors that he is straight
+    &lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+
+<p>These shortcuts can be combined with long-hand attributes; the two values will be merged together as though they were all placed in an array (see <a href="#class-and-id-attributes">the documentation on <code>:class</code> and <code>:id</code> attributes</a>). For example:</p>
+
+<pre class="code ruby"><code class="ruby">%div#Article.article.entry{:id =&gt; @article.number, :class =&gt; @article.visibility}</code></pre>
+
+<p>is equivalent to</p>
+
+<pre class="code ruby"><code class="ruby">%div{:id =&gt; ['Article', @article.number], :class =&gt; ['article', 'entry', @article.visibility]} Gabba Hey</code></pre>
+
+<p>and could compile to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div class="article entry visible" id="Article_27"&gt;Gabba Hey&lt;/div&gt;</code></pre>
+
+<h4 id="implicit_div_elements">Implicit Div Elements</h4>
+
+<p>Because divs are used so often, they’re the default elements. If you only define a class and/or id using <code>.</code> or <code>#</code>, a div is automatically used. For example:</p>
+
+<pre class="code ruby"><code class="ruby">#collection
+  .item
+    .description What a cool item!</code></pre>
+
+<p>is the same as:</p>
+
+<pre class="code ruby"><code class="ruby">%div#collection
+  %div.item
+    %div.description What a cool item!</code></pre>
+
+<p>and is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div id='collection'&gt;
+  &lt;div class='item'&gt;
+    &lt;div class='description'&gt;What a cool item!&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+
+<h3 id="empty_void_tags_">Empty (void) Tags: <code>/</code></h3>
+
+<p>The forward slash character, when placed at the end of a tag definition, causes Haml to treat it as being an empty (or void) element. Depending on the format, the tag will be rendered either without a closing tag (<code>:html4</code> or <code>:html5</code>), or as a self-closing tag (<code>:xhtml</code>). For example:</p>
+
+<pre class="code ruby"><code class="ruby">%br/
+%meta{'http-equiv' =&gt; 'Content-Type', :content =&gt; 'text/html'}/</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;br&gt;
+&lt;meta content='text/html' http-equiv='Content-Type'&gt;</code></pre>
+
+<p>when the format is <code>:html4</code> or <code>:html5</code>, and to</p>
+
+<pre class="code ruby"><code class="ruby">&lt;br /&gt;
+&lt;meta content='text/html' http-equiv='Content-Type' /&gt;</code></pre>
+
+<p>when the format is <code>:xhtml</code>.</p>
+
+<p>Some tags are automatically treated as being empty, as long as they have no content in the Haml source. <code>meta</code>, <code>img</code>, <code>link</code>, <code>br</code>, <code>hr</code>, <code>input</code>, <code>area</code>, <code>param</code>, <code>col</code> and <code>base</code> tags are treated as empty by default. This list can be customized by setting the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#autoclose-instance_method" title="Haml::Options#autoclose (method)"><code>:autoclose</code></a></span> option.</p>
+
+<h3 id="whitespace_removal__and_">Whitespace Removal: <code>&gt;</code> and <code>&lt;</code></h3>
+
+<p><code>&gt;</code> and <code>&lt;</code> give you more control over the whitespace near a tag. <code>&gt;</code> will remove all whitespace surrounding a tag, while <code>&lt;</code> will remove all whitespace immediately within a tag. You can think of them as alligators eating the whitespace: <code>&gt;</code> faces out of the tag and eats the whitespace on the outside, and <code>&lt;</code> faces into the tag and eats the whitespace on the inside. They’re placed at the end of a tag definition, after class, id, and attribute declarations but before <code>/</code> or <code>=</code>. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%blockquote&lt;
+  %div
+    Foo!</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;blockquote&gt;&lt;div&gt;
+  Foo!
+&lt;/div&gt;&lt;/blockquote&gt;</code></pre>
+
+<p>And:</p>
+
+<pre class="code ruby"><code class="ruby">%img
+%img&gt;
+%img</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;img /&gt;&lt;img /&gt;&lt;img /&gt;</code></pre>
+
+<p>And:</p>
+
+<pre class="code ruby"><code class="ruby">%p&lt;= "Foo\nBar"</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;Foo
+Bar&lt;/p&gt;</code></pre>
+
+<p>And finally:</p>
+
+<pre class="code ruby"><code class="ruby">%img
+%pre&gt;&lt;
+  foo
+  bar
+%img</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;img /&gt;&lt;pre&gt;foo
+bar&lt;/pre&gt;&lt;img /&gt;</code></pre>
+
+<h3 id="object_reference_">Object Reference: <code>[]</code></h3>
+
+<p>Square brackets follow a tag definition and contain a Ruby object that is used to set the class and id of that tag. The class is set to the object’s class (transformed to use underlines rather than camel case) and the id is set to the object’s class, followed by the value of its <code>#to_key</code> or <code>#id</code> method (in that order). This is most useful for elements that represent instances of Active Model models. Additionally, the second argument (if present) will be used as a prefix for both the id and class attributes. For example:</p>
+
+<pre class="code ruby"><code class="ruby"># file: app/controllers/users_controller.rb
+
+def show
+  @user = CrazyUser.find(15)
+end
+
+-# file: app/views/users/show.haml
+
+%div[@user, :greeting]
+  %bar[290]/
+  Hello!</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div class='greeting_crazy_user' id='greeting_crazy_user_15'&gt;
+  &lt;bar class='fixnum' id='fixnum_581' /&gt;
+  Hello!
+&lt;/div&gt;</code></pre>
+
+<p>If you require that the class be something other than the underscored object’s class, you can implement the <code>haml_object_ref</code> method on the object.</p>
+
+<pre class="code ruby"><code class="ruby"># file: app/models/crazy_user.rb
+
+class CrazyUser &lt; ActiveRecord::Base
+  def haml_object_ref
+    "a_crazy_user"
+  end
+end
+
+-# file: app/views/users/show.haml
+
+%div[@user]
+  Hello!</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div class='a_crazy_user' id='a_crazy_user_15'&gt;
+  Hello!
+&lt;/div&gt;</code></pre>
+
+<p>The <code>:class</code> attribute may be used in conjunction with an object reference. The compiled element will have the union of all classes.</p>
+
+<pre class="code ruby"><code class="ruby">- user = User.find(1)
+%p[user]{:class =&gt; 'alpha bravo'}
+&lt;p id="user_1" class="alpha bravo user"&gt;&lt;/p&gt;</code></pre>
+
+<h2 id="doctype_">Doctype: <code>!!!</code></h2>
+
+<p>When describing HTML documents with Haml, you can have a document type or XML prolog generated automatically by including the characters <code>!!!</code>. For example:</p>
+
+<pre class="code ruby"><code class="ruby">!!! XML
+!!!
+%html
+  %head
+    %title Myspace
+  %body
+    %h1 I am the international space station
+    %p Sign my guestbook</code></pre>
+
+<p>is compiled to:</p>
+<!--?xml version='1.0' encoding='utf-8' ?-->
+<pre class="code ruby"><code class="ruby">&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"&gt;
+&lt;html&gt;
+  &lt;head&gt;
+    &lt;title&gt;Myspace&lt;/title&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;h1&gt;I am the international space station&lt;/h1&gt;
+    &lt;p&gt;Sign my guestbook&lt;/p&gt;
+  &lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+<p>You can also specify the specific doctype after the <code>!!!</code> When the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#format-instance_method" title="Haml::Options#format (method)"><code>:format</code></a></span> is set to <code>:xhtml</code>. The following doctypes are supported:</p>
+
+<dl>
+<dt><code>!!!</code></dt>
+
+<dd>XHTML 1.0 Transitional<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"&gt;</code></dd>
+
+<dt><code>!!! Strict</code></dt>
+
+<dd>XHTML 1.0 Strict<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"&gt;</code></dd>
+
+<dt><code>!!! Frameset</code></dt>
+
+<dd>XHTML 1.0 Frameset<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Frameset//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd"&gt;</code></dd>
+
+<dt><code>!!! 5</code></dt>
+
+<dd>XHTML 5<br> <code>&lt;!DOCTYPE html&gt;</code><br></dd>
+
+<dt><code>!!! 1.1</code></dt>
+
+<dd>XHTML 1.1<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"&gt;</code></dd>
+
+<dt><code>!!! Basic</code></dt>
+
+<dd>XHTML Basic 1.1<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.1//EN" "http://www.w3.org/TR/xhtml-basic/xhtml-basic11.dtd"&gt; </code></dd>
+
+<dt><code>!!! Mobile</code></dt>
+
+<dd>XHTML Mobile 1.2<br> <code>&lt;!DOCTYPE html PUBLIC "-//WAPFORUM//DTD XHTML Mobile 1.2//EN" "http://www.openmobilealliance.org/tech/DTD/xhtml-mobile12.dtd"&gt;</code></dd>
+
+<dt><code>!!! RDFa</code></dt>
+
+<dd>XHTML+RDFa 1.0<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "http://www.w3.org/MarkUp/DTD/xhtml-rdfa-1.dtd"&gt;</code></dd>
+</dl>
+
+<p>When the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#format-instance_method" title="Haml::Options#format (method)"><code>:format</code></a></span> option is set to <code>:html4</code>, the following doctypes are supported:</p>
+
+<dl>
+<dt><code>!!!</code></dt>
+
+<dd>HTML 4.01 Transitional<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd"&gt;</code></dd>
+
+<dt><code>!!! Strict</code></dt>
+
+<dd>HTML 4.01 Strict<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"&gt;</code></dd>
+
+<dt><code>!!! Frameset</code></dt>
+
+<dd>HTML 4.01 Frameset<br> <code>&lt;!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN" "http://www.w3.org/TR/html4/frameset.dtd"&gt;</code></dd>
+</dl>
+
+<p>When the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#format-instance_method" title="Haml::Options#format (method)"><code>:format</code></a></span> option is set to <code>:html5</code>, <code>!!!</code> is always <code>&lt;!DOCTYPE html&gt;</code>.</p>
+
+<p>If you’re not using the UTF-8 character set for your document, you can specify which encoding should appear in the XML prolog in a similar way. For example:</p>
+
+<pre class="code ruby"><code class="ruby">!!! XML iso-8859-1</code></pre>
+
+<p>is compiled to:</p>
+<!--?xml version='1.0' encoding='iso-8859-1' ?-->
+<p>If the mime_type of the template being rendered is <code>text/xml</code> then a format of <code>:xhtml</code> will be used even if the global output format is set to <code>:html4</code> or <code>:html5</code>.</p>
+
+<h2 id="comments">Comments</h2>
+
+<p>Haml supports two sorts of comments: those that show up in the HTML output and those that don’t.</p>
+
+<h3 id="html_comments_">HTML Comments: <code>/</code></h3>
+
+<p>The forward slash character, when placed at the beginning of a line, wraps all text after it in an HTML comment. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%peanutbutterjelly
+  / This is the peanutbutterjelly element
+  I like sandwiches!</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;peanutbutterjelly&gt;
+  &lt;!-- This is the peanutbutterjelly element --&gt;
+  I like sandwiches!
+&lt;/peanutbutterjelly&gt;</code></pre>
+
+<p>The forward slash can also wrap indented sections of code. For example:</p>
+
+<pre class="code ruby"><code class="ruby">/
+  %p This doesn't render...
+  %div
+    %h1 Because it's commented out!</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;!--
+  &lt;p&gt;This doesn't render...&lt;/p&gt;
+  &lt;div&gt;
+    &lt;h1&gt;Because it's commented out!&lt;/h1&gt;
+  &lt;/div&gt;
+--&gt;</code></pre>
+
+<h4 id="conditional_comments_">Conditional Comments: <code>/[]</code></h4>
+
+<p>You can also use <a href="http://www.quirksmode.org/css/condcom.html" target="_parent">Internet Explorer conditional comments</a> by enclosing the condition in square brackets after the <code>/</code>. For example:</p>
+
+<pre class="code ruby"><code class="ruby">/[if IE]
+  %a{ :href =&gt; 'http://www.mozilla.com/en-US/firefox/' }
+    %h1 Get Firefox</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;!--[if IE]&gt;
+  &lt;a href='http://www.mozilla.com/en-US/firefox/'&gt;
+    &lt;h1&gt;Get Firefox&lt;/h1&gt;
+  &lt;/a&gt;
+&lt;![endif]--&gt;</code></pre>
+
+<h3 id="haml_comments_">Haml Comments: <code>-#</code></h3>
+
+<p>The hyphen followed immediately by the pound sign signifies a silent comment. Any text following this isn’t rendered in the resulting document at all.</p>
+
+<p>For example:</p>
+
+<pre class="code ruby"><code class="ruby">%p foo
+-# This is a comment
+%p bar</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;foo&lt;/p&gt;
+&lt;p&gt;bar&lt;/p&gt;</code></pre>
+
+<p>You can also nest text beneath a silent comment. None of this text will be rendered. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%p foo
+-#
+  This won't be displayed
+    Nor will this
+                   Nor will this.
+%p bar</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;foo&lt;/p&gt;
+&lt;p&gt;bar&lt;/p&gt;</code></pre>
+
+<h2 id="ruby_evaluation">Ruby Evaluation</h2>
+
+<h3 id="inserting_ruby_">Inserting Ruby: <code>=</code></h3>
+
+<p>The equals character is followed by Ruby code. This code is evaluated and the output is inserted into the document. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%p
+  = ['hi', 'there', 'reader!'].join " "
+  = "yo"</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;
+  hi there reader!
+  yo
+&lt;/p&gt;</code></pre>
+
+<p>If the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#escape_html-instance_method" title="Haml::Options#escape_html (method)"><code>:escape_html</code></a></span> option is set, <code>=</code> will sanitize any HTML-sensitive characters generated by the script. For example:</p>
+
+<pre class="code ruby"><code class="ruby">= '&lt;script&gt;alert("I\'m evil!");&lt;/script&gt;'</code></pre>
+
+<p>would be compiled to</p>
+
+<pre class="code ruby"><code class="ruby">&amp;lt;script&amp;gt;alert(&amp;quot;I'm evil!&amp;quot;);&amp;lt;/script&amp;gt;</code></pre>
+
+<p><code>=</code> can also be used at the end of a tag to insert Ruby code within that tag. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%p= "hello"</code></pre>
+
+<p>would be compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;hello&lt;/p&gt;</code></pre>
+
+<p>A line of Ruby code can be stretched over multiple lines as long as each line but the last ends with a comma. For example:</p>
+
+<pre class="code ruby"><code class="ruby">= link_to_remote "Add to cart",
+    :url =&gt; { :action =&gt; "add", :id =&gt; product.id },
+    :update =&gt; { :success =&gt; "cart", :failure =&gt; "error" }</code></pre>
+
+<p>Note that it’s illegal to nest code within a tag that ends with <code>=</code>.</p>
+
+<h3 id="running_ruby_">Running Ruby: <code>-</code></h3>
+
+<p>The hyphen character is also followed by Ruby code. This code is evaluated but <em>not</em> inserted into the document.</p>
+
+<p><strong>It is not recommended that you use this widely; almost all processing code and logic should be restricted to Controllers, Helpers, or partials.</strong></p>
+
+<p>For example:</p>
+
+<pre class="code ruby"><code class="ruby">- foo = "hello"
+- foo &lt;&lt; " there"
+- foo &lt;&lt; " you!"
+%p= foo</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;
+  hello there you!
+&lt;/p&gt;</code></pre>
+
+<p>A line of Ruby code can be stretched over multiple lines as long as each line but the last ends with a comma. For example:</p>
+
+<pre class="code ruby"><code class="ruby">- links = {:home =&gt; "/",
+    :docs =&gt; "/docs",
+    :about =&gt; "/about"}</code></pre>
+
+<h4 id="ruby_blocks">Ruby Blocks</h4>
+
+<p>Ruby blocks, like XHTML tags, don’t need to be explicitly closed in Haml. Rather, they’re automatically closed, based on indentation. A block begins whenever the indentation is increased after a Ruby evaluation command. It ends when the indentation decreases (as long as it’s not an <code>else</code> clause or something similar). For example:</p>
+
+<pre class="code ruby"><code class="ruby">- (42...47).each do |i|
+  %p= i
+%p See, I can count!</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;42&lt;/p&gt;
+&lt;p&gt;43&lt;/p&gt;
+&lt;p&gt;44&lt;/p&gt;
+&lt;p&gt;45&lt;/p&gt;
+&lt;p&gt;46&lt;/p&gt;
+&lt;p&gt;See, I can count!&lt;/p&gt;</code></pre>
+
+<p>Another example:</p>
+
+<pre class="code ruby"><code class="ruby">%p
+  - case 2
+  - when 1
+    = "1!"
+  - when 2
+    = "2?"
+  - when 3
+    = "3."</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;
+  2?
+&lt;/p&gt;</code></pre>
+
+<h3 id="tilde">Whitespace Preservation: <code>~</code></h3>
+
+<p><code>~</code> works just like <code>=</code>, except that it runs <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Helpers.html#find_and_preserve-instance_method" title="Haml::Helpers#find_and_preserve (method)">Haml::Helpers#find_and_preserve</a></span> on its input. For example,</p>
+
+<pre class="code ruby"><code class="ruby">~ "Foo\n&lt;pre&gt;Bar\nBaz&lt;/pre&gt;"</code></pre>
+
+<p>is the same as:</p>
+
+<pre class="code ruby"><code class="ruby">= find_and_preserve("Foo\n&lt;pre&gt;Bar\nBaz&lt;/pre&gt;")</code></pre>
+
+<p>and is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">Foo
+&lt;pre&gt;Bar&amp;#x000A;Baz&lt;/pre&gt;</code></pre>
+
+<p>See also <a href="#whitespace_preservation">Whitespace Preservation</a>.</p>
+
+<h3 id="ruby_interpolation_">Ruby Interpolation: <code>#{}</code></h3>
+
+<p>Ruby code can also be interpolated within plain text using <code>#{}</code>, similarly to Ruby string interpolation. For example,</p>
+
+<pre class="code ruby"><code class="ruby">%p This is #{h quality} cake!</code></pre>
+
+<p>is the same as</p>
+
+<pre class="code ruby"><code class="ruby">%p= "This is #{h quality} cake!"</code></pre>
+
+<p>and might compile to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;This is scrumptious cake!&lt;/p&gt;</code></pre>
+
+<p>Backslashes can be used to escape <code>#{}</code> strings, but they don’t act as escapes anywhere else in the string. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%p
+  Look at \\#{h word} lack of backslash: \#{foo}
+  And yon presence thereof: \{foo}</code></pre>
+
+<p>might compile to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;
+  Look at \yon lack of backslash: #{foo}
+  And yon presence thereof: \{foo}
+&lt;/p&gt;</code></pre>
+
+<p>Interpolation can also be used within <a href="#filters">filters</a>. For example:</p>
+
+<pre class="code ruby"><code class="ruby">:javascript
+  $(document).ready(function() {
+    alert(#{@message.to_json});
+  });</code></pre>
+
+<p>might compile to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;script type='text/javascript'&gt;
+  //&lt;![CDATA[
+    $(document).ready(function() {
+      alert("Hi there!");
+    });
+  //]]&gt;
+&lt;/script&gt;</code></pre>
+
+<h3 id="escaping_html">Escaping HTML: <code>&amp;=</code></h3>
+
+<p>An ampersand followed by one or two equals characters evaluates Ruby code just like the equals without the ampersand, but sanitizes any HTML-sensitive characters in the result of the code. For example:</p>
+
+<pre class="code ruby"><code class="ruby">&amp;= "I like cheese &amp; crackers"</code></pre>
+
+<p>compiles to</p>
+
+<pre class="code ruby"><code class="ruby">I like cheese &amp;amp; crackers</code></pre>
+
+<p>If the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#escape_html-instance_method" title="Haml::Options#escape_html (method)"><code>:escape_html</code></a></span> option is set, <code>&amp;=</code> behaves identically to <code>=</code>.</p>
+
+<p><code>&amp;</code> can also be used on its own so that <code>#{}</code> interpolation is escaped. For example,</p>
+
+<pre class="code ruby"><code class="ruby">&amp; I like #{"cheese &amp; crackers"}</code></pre>
+
+<p>compiles to:</p>
+
+<pre class="code ruby"><code class="ruby">I like cheese &amp;amp; crackers</code></pre>
+
+<h3 id="unescaping_html">Unescaping HTML: <code>!=</code></h3>
+
+<p>An exclamation mark followed by one or two equals characters evaluates Ruby code just like the equals would, but never sanitizes the HTML.</p>
+
+<p>By default, the single equals doesn’t sanitize HTML either. However, if the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#escape_html-instance_method" title="Haml::Options#escape_html (method)"><code>:escape_html</code></a></span> option is set, <code>=</code> will sanitize the HTML, but <code>!=</code> still won’t. For example, if <code>:escape_html</code> is set:</p>
+
+<pre class="code ruby"><code class="ruby">= "I feel &lt;strong&gt;!"
+!= "I feel &lt;strong&gt;!"</code></pre>
+
+<p>compiles to</p>
+
+<pre class="code ruby"><code class="ruby">I feel &amp;lt;strong&amp;gt;!
+I feel &lt;strong&gt;!</code></pre>
+
+<p><code>!</code> can also be used on its own so that <code>#{}</code> interpolation is unescaped. For example,</p>
+
+<pre class="code ruby"><code class="ruby">! I feel #{"&lt;strong&gt;"}!</code></pre>
+
+<p>compiles to</p>
+
+<pre class="code ruby"><code class="ruby">I feel &lt;strong&gt;!</code></pre>
+
+<h2 id="filters">Filters</h2>
+
+<p>The colon character designates a filter. This allows you to pass an indented block of text as input to another filtering program and add the result to the output of Haml. The syntax is simply a colon followed by the name of the filter. For example:</p>
+
+<pre class="code ruby"><code class="ruby">%p
+  :markdown
+    # Greetings
+
+    Hello, *World*</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;p&gt;
+  &lt;h1&gt;Greetings&lt;/h1&gt;
+
+  &lt;p&gt;Hello, &lt;em&gt;World&lt;/em&gt;&lt;/p&gt;
+&lt;/p&gt;</code></pre>
+
+<p>Filters can have Ruby code interpolated with <code>#{}</code>. For example:</p>
+
+<pre class="code ruby"><code class="ruby">- flavor = "raspberry"
+#content
+  :textile
+    I *really* prefer _#{flavor}_ jam.</code></pre>
+
+<p>is compiled to</p>
+
+<pre class="code ruby"><code class="ruby">&lt;div id='content'&gt;
+  &lt;p&gt;I &lt;strong&gt;really&lt;/strong&gt; prefer &lt;em&gt;raspberry&lt;/em&gt; jam.&lt;/p&gt;
+&lt;/div&gt;</code></pre>
+
+<p>Currently, filters ignore the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#escape_html-instance_method" title="Haml::Options#escape_html (method)"><code>:escape_html</code></a></span> option. This means that <code>#{}</code> interpolation within filters is never HTML-escaped.</p>
+
+<p>The functionality of some filters such as Markdown can be provided by many different libraries. Usually you don’t have to worry about this - you can just load the gem of your choice and Haml will automatically use it.</p>
+
+<p>However in some cases you may want to make Haml explicitly use a specific gem to be used by a filter. In these cases you can do this via Tilt, the library Haml uses to implement many of its filters:</p>
+
+<pre class="code ruby"><code class="ruby">Tilt.prefer Tilt::RedCarpetTemplate</code></pre>
+
+<p>See the <a href="https://github.com/rtomayko/tilt#fallback-mode" target="_parent">Tilt documentation</a> for more info.</p>
+
+<p>Haml comes with the following filters defined:</p>
+
+<h3 id="cdata-filter"><code>:cdata</code></h3>
+
+<p>Surrounds the filtered text with CDATA tags.</p>
+
+<h3 id="coffee-filter"><code>:coffee</code></h3>
+
+<p>Compiles the filtered text to Javascript using Cofeescript. You can also reference this filter as <code>:coffeescript</code>. This filter is implemented using Tilt.</p>
+
+<h3 id="css-filter"><code>:css</code></h3>
+
+<p>Surrounds the filtered text with <code>&lt;style&gt;</code> and (optionally) CDATA tags. Useful for including inline CSS. Use the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#cdata-instance_method" title="Haml::Options#cdata (method)"><code>:cdata</code> option</a></span> to control when CDATA tags are added.</p>
+
+<h3 id="erb-filter"><code>:erb</code></h3>
+
+<p>Parses the filtered text with ERb, like an RHTML template. Not available if the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#suppress_eval-instance_method" title="Haml::Options#suppress_eval (method)"><code>:suppress_eval</code></a></span> option is set to true. Embedded Ruby code is evaluated in the same context as the Haml template. This filter is implemented using Tilt.</p>
+
+<h3 id="escaped-filter"><code>:escaped</code></h3>
+
+<p>Works the same as plain, but HTML-escapes the text before placing it in the document.</p>
+
+<h3 id="javascript-filter"><code>:javascript</code></h3>
+
+<p>Surrounds the filtered text with <code>&lt;script&gt;</code> and (optionally) CDATA tags. Useful for including inline Javascript. Use the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#cdata-instance_method" title="Haml::Options#cdata (method)"><code>:cdata</code> option</a></span> to control when CDATA tags are added.</p>
+
+<h3 id="less-filter"><code>:less</code></h3>
+
+<p>Parses the filtered text with <a href="http://lesscss.org/" target="_parent">Less</a> to produce CSS output. This filter is implemented using Tilt.</p>
+
+<h3 id="markdown-filter"><code>:markdown</code></h3>
+
+<p>Parses the filtered text with <a href="http://daringfireball.net/projects/markdown" target="_parent">Markdown</a>. This filter is implemented using Tilt.</p>
+
+<h3 id="maruku-filter"><code>:maruku</code></h3>
+
+<p>Parses the filtered text with <a href="https://github.com/nex3/maruku" target="_parent">Maruku</a>, which has some non-standard extensions to Markdown.</p>
+
+<p>As of Haml 4.0, this filter is defined in <a href="https://github.com/haml/haml-contrib" target="_parent">Haml contrib</a> but is loaded automatically for historical reasons. In future versions of Haml it will likely not be loaded by default. This filter is implemented using Tilt.</p>
+
+<h3 id="plain-filter"><code>:plain</code></h3>
+
+<p>Does not parse the filtered text. This is useful for large blocks of text without HTML tags, when you don’t want lines starting with <code>.</code> or <code>-</code> to be parsed.</p>
+
+<h3 id="preserve-filter"><code>:preserve</code></h3>
+
+<p>Inserts the filtered text into the template with whitespace preserved. <code>preserve</code>d blocks of text aren’t indented, and newlines are replaced with the HTML escape code for newlines, to preserve nice-looking output. See also <a href="#whitespace_preservation">Whitespace Preservation</a>.</p>
+
+<h3 id="ruby-filter"><code>:ruby</code></h3>
+
+<p>Parses the filtered text with the normal Ruby interpreter. Creates an <code>IO</code> object named <code>haml_io</code>, anything written to it is output into the Haml document. Not available if the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Options.html#suppress_eval-instance_method" title="Haml::Options#suppress_eval (method)"><code>:suppress_eval</code></a></span> option is set to true. The Ruby code is evaluated in the same context as the Haml template.</p>
+
+<h3 id="sass-filter"><code>:sass</code></h3>
+
+<p>Parses the filtered text with <a href="http://sass-lang.com/" target="_parent">Sass</a> to produce CSS output. This filter is implemented using Tilt.</p>
+
+<h3 id="scss-filter"><code>:scss</code></h3>
+
+<p>Parses the filtered text with Sass like the <code>:sass</code> filter, but uses the newer SCSS syntax to produce CSS output. This filter is implemented using Tilt.</p>
+
+<h3 id="textile-filter"><code>:textile</code></h3>
+
+<p>Parses the filtered text with <a href="http://www.textism.com/tools/textile" target="_parent">Textile</a>. Only works if <a href="http://redcloth.org/" target="_parent">RedCloth</a> is installed.</p>
+
+<p>As of Haml 4.0, this filter is defined in <a href="https://github.com/haml/haml-contrib" target="_parent">Haml contrib</a> but is loaded automatically for historical reasons. In future versions of Haml it will likely not be loaded by default. This filter is implemented using Tilt.</p>
+
+<h3 id="custom_filters">Custom Filters</h3>
+
+<p>You can also define your own filters. See <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Filters.html" title="Haml::Filters (module)">Haml::Filters</a></span> for details.</p>
+
+<h2 id="helper-methods">Helper Methods</h2>
+
+<p>Sometimes you need to manipulate whitespace in a more precise fashion than what the whitespace removal methods allow. There are a few helper methods that are useful when dealing with inline content. All these methods take a Haml block to modify.</p>
+
+<h3 id="surround">surround</h3>
+
+<p>Surrounds a Haml block with text. Expects 1 or 2 string arguments used to surround the Haml block. If a second argument is not provided, the first argument is used as the second.</p>
+
+<pre class="code ruby"><code class="ruby">= surround "(", ")" do
+  = link_to "learn more", "#"</code></pre>
+
+<h3 id="precede">precede</h3>
+
+<p>Prepends a Haml block with text. Expects 1 argument.</p>
+
+<pre class="code ruby"><code class="ruby">= precede "*" do
+  %span Required</code></pre>
+
+<h3 id="succeed">succeed</h3>
+
+<p>Appends a Haml block with text. Expects 1 argument.</p>
+
+<pre class="code ruby"><code class="ruby">Begin by
+= succeed "," do
+  = link_to "filling out your profile", "#"
+= succeed "," do
+  = link_to "adding a bio", "#"
+and
+= succeed "." do
+  = link_to "inviting friends", "#"</code></pre>
+
+<h2 id="multiline">Multiline: <code>|</code></h2>
+
+<p>The pipe character designates a multiline string. It’s placed at the end of a line (after some whitespace) and means that all following lines that end with <code>|</code> will be evaluated as though they were on the same line. <strong>Note that even the last line in the multiline block should end with <code>|</code>.</strong> For example:</p>
+
+<pre class="code ruby"><code class="ruby">%whoo
+  %hoo= h(                       |
+    "I think this might get " +  |
+    "pretty long so I should " + |
+    "probably make it " +        |
+    "multiline so it doesn't " + |
+    "look awful.")               |
+  %p This is short.</code></pre>
+
+<p>is compiled to:</p>
+
+<pre class="code ruby"><code class="ruby">&lt;whoo&gt;
+  &lt;hoo&gt;I think this might get pretty long so I should probably make it multiline so it doesn't look awful.&lt;/hoo&gt;
+  &lt;p&gt;This is short&lt;/p&gt;
+&lt;/whoo&gt;</code></pre>
+
+<p>Using multiline declarations in Haml is intentionally awkward. This is designed to discourage people from putting lots and lots of Ruby code in their Haml templates. If you find yourself using multiline declarations, stop and think: could I do this better with a helper?</p>
+
+<p>Note that there are a few cases where it’s useful to allow something to flow over onto multiple lines in a non-awkward manner. One of these is HTML attributes. Some elements just have lots of attributes, so you can wrap attributes without using <code>|</code> (see <a href="#attributes">Attributes</a>).</p>
+
+<p>In addition, sometimes you need to call Ruby methods or declare data structures that just need a lot of template information. So data structures and functions that require lots of arguments can be wrapped over multiple lines, as long as each line but the last ends in a comma (see <a href="#inserting_ruby_">Inserting Ruby</a>).</p>
+
+<h2 id="whitespace_preservation">Whitespace Preservation</h2>
+
+<p>Sometimes you don’t want Haml to indent all your text. For example, tags like <code>pre</code> and <code>textarea</code> are whitespace-sensitive; indenting the text makes them render wrong.</p>
+
+<p>Haml deals with this by “preserving” newlines before they’re put into the document – converting them to the HTML whitespace escape code, <code>&amp;#x000A;</code>. Then Haml won’t try to re-format the indentation.</p>
+
+<p>Literal <code>textarea</code> and <code>pre</code> tags automatically preserve content given through <code>=</code>. Dynamically-generated <code>textarea</code>s and <code>pre</code>s can’t be preserved automatically, and so should be passed through <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Helpers.html#find_and_preserve-instance_method" title="Haml::Helpers#find_and_preserve (method)">Haml::Helpers#find_and_preserve</a></span> or the <a href="#tilde"><code>~</code> command</a>, which has the same effect.</p>
+
+<p>Blocks of literal text can be preserved using the <a href="#preserve-filter"><code>:preserve</code> filter</a>.</p>
+
+<h2 id="helpers">Helpers</h2>
+
+<p>Haml offers a bunch of helpers that are useful for doing stuff like preserving whitespace, creating nicely indented output for user-defined helpers, and other useful things. The helpers are all documented in the <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Helpers.html" title="Haml::Helpers (module)">Haml::Helpers</a></span> and <span class="object_link"><a href="http://haml.info/docs/yardoc/Haml/Helpers/ActionViewExtensions.html" title="Haml::Helpers::ActionViewExtensions (module)">Haml::Helpers::ActionViewExtensions</a></span> modules.</p>
+</div></div>
+
+    <div id="footer">
+  Generated on Sun Jan 25 08:27:35 2015 by
+  <a href="http://yardoc.org/" title="Yay! A Ruby Documentation Tool" target="_parent">yard</a>
+  0.8.7.6 (ruby-2.2.0).
+</div>
+
+
+  <script type="text/javascript">
+  var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+  document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+  </script><script src="http://www.google-analytics.com/ga.js" type="text/javascript"></script>
+  <script type="text/javascript">
+  try {
+  var pageTracker = _gat._getTracker("UA-3592613-6");
+  pageTracker._trackPageview();
+  } catch(err) {}</script>
+
+
+  
+</body></html>
