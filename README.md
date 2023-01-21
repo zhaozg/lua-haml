@@ -2,13 +2,13 @@
 
 ## About
 
-Lua Haml is an implementation of the [Haml](http://haml.info) markup
+Lua Haml is an implementation of the [Haml](https://haml.info) markup
 language for Lua.
 
 A Haml language reference can be found
-[here](http://haml.info/docs/yardoc/file.HAML_REFERENCE.html).
+[here](https://haml.info/docs/yardoc/file.REFERENCE.html).
 
-A basic haml tutorial can be found [here](http://haml.info/tutorial.html)
+A basic haml tutorial can be found [here](https://haml.info/tutorial.html)
 
 This repository is modified version of [here](https://github.com/norman/lua-haml)
 
@@ -16,9 +16,10 @@ Lua Haml implements almost 100% of Ruby Haml, and attempts to be as compatible
 as possible with it, with the following exceptions:
 
 * Your script blocks are in Lua rather than Ruby, obviously.
-* A few Ruby-specific filters are not implemented, namely `:maruku`, `:ruby` and `:sass`.
+* A few Ruby-specific filters are not implemented,
+namely `:maruku`, `:ruby` and `:sass`.
 * No attribute methods. This feature would have to be added to Ruby-style
-  attributes which are discouraged in Lua-Haml, or the creation of a
+  attributes, which are discouraged in Lua-Haml, or the creation of a
   Lua-specific attribute format, which I don't want to add.
 * No object reference. This feature is idiomatic to the Rails framework and
   doesn't really apply to Lua.
@@ -27,24 +28,20 @@ as possible with it, with the following exceptions:
   option.
 
 Here's a [Haml
-template](http://github.com/norman/lua-haml/tree/master/sample.haml) that uses
+template](https://github.com/norman/lua-haml/tree/master/sample.haml) that uses
 most of Lua Haml's features.
 
 ## TODO
 
 Lua Haml is now feature complete, but is still considered beta quality. That
 said, I am using it for a production website, and will work quickly to fix any
-bugs that are reported.  So please feel free to use it for serious work - just
+bugs that are reported.  So please feel free to use it for serious work, just
 not the Space Shuttle, ok? And very welcome any patch.
 
 ## Hacking it
 
-The [Github repository](http://github.com/zhaozg/lua-haml) is located at:
-
-    git://github.com/zhaozg/lua-haml.git
-
-Before run the specification test, you need install 
-[lpeg module](http://www.inf.puc-rio.br/~roberto/lpeg/) and 
+Before run the specification test, you need to install
+[lpeg module](http://www.inf.puc-rio.br/~roberto/lpeg/) and
 [json modules](https://github.com/LuaDist/dkjson)
 
 To run test, do this:
@@ -61,7 +58,7 @@ To run bench, do this:
 
 ## Bug reports
 
-Please report them on the [Github issue tracker](http://github.com/zhaozg/lua-haml/issues).
+Please report them on the [Issues Tracker](https://github.com/zhaozg/lua-haml/issues).
 
 ## Author
 
