@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
-local haml = require "haml"
+local haml = require "haml.init"
 local VERSION = "0.2.0"
 
 local banner = "LuaHaml %s, copyright Norman Clarke <norman@njclarke.com> 2009-2012"
@@ -34,7 +34,7 @@ Examples:
 
 ]]
 
-local haml_options = {format = "xhtml"}
+local haml_options = { format = "xhtml" }
 
 local function read_file()
   local file = arg[#arg]
@@ -55,53 +55,54 @@ local function run_parser(haml_string)
 end
 
 local function run_precompiler(haml_string)
-  local compiled = haml.compile(haml.parse(haml_string),haml_options)
+  local compiled = haml.compile(haml.parse(haml_string), haml_options)
   haml.print_r(compiled)
 end
 
 local function render(haml_string)
   local output = haml.render(haml_string, haml_options)
-  local r,lhtml = pcall(require,'lhtml')
+  local r, lhtml = pcall(require, 'lhtml')
   if r then
-    local function interpolate_code(str,incode)
-      if incode==false then
-        str = str:gsub('"','"')
+    local function interpolate_code(str, incode)
+      if incode == false then
+        str = str:gsub('"', '"')
       end
       return str:gsub('([\\]*)#{(.-)}', function(slashes, match)
         if #slashes == 1 then
-            return '#{' .. match .. '}'
+          return '#{' .. match .. '}'
         else
           if incode then
-            return ']====]) io.write('.. slashes ..match ..') io.write([====['
+            return ']====]) io.write(' .. slashes .. match .. ') io.write([====['
           else
-            return ']]) io.write('..slashes..match..') io.write([['
+            return ']]) io.write(' .. slashes .. match .. ') io.write([['
           end
         end
       end)
     end
 
-    local function _totable(code,ins)
+    local function _totable(code, ins)
       if code then
         if not ins then
-          if #code>0 then
-            code = string.format('io.write([====[%s]====])',interpolate_code(code,true))
+          if #code > 0 then
+            code = string.format('io.write([====[%s]====])', interpolate_code(code, true))
           end
           return code
-        elseif ins=='=' then
+        elseif ins == '=' then
           if code:find('([\\]*)#{(.-)}') then
-            return string.format('io.write([[%s]])',tostring(interpolate_code(code,false)))
+            return string.format('io.write([[%s]])', tostring(interpolate_code(code, false)))
           else
-            return string.format('io.write(%s)',code)
+            return string.format('io.write(%s)', code)
           end
-        elseif ins=='' then
-            return code
+        elseif ins == '' then
+          return code
         else
-            error(string.format('handle %s failed for\n%s',ins,code))
+          error(string.format('handle %s failed for\n%s', ins, code))
         end
       end
     end
-    local html = lhtml(output,_totable)
-    html = table.concat(html,'')
+
+    local html = lhtml(output, _totable)
+    html = table.concat(html, '')
     html = assert(loadstring(html))
     return html()
   end
@@ -151,6 +152,6 @@ for i, v in ipairs(arg) do
   end
 end
 local _ENV = {}
-setmetatable(_ENV, {__index = _G})
-setfenv(exec_func,_ENV)
-exec_func(input_func(),{}, _ENV)
+setmetatable(_ENV, { __index = _G })
+setfenv(exec_func, _ENV)
+exec_func(input_func(), {}, _ENV)

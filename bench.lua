@@ -1,6 +1,6 @@
-local haml = require "haml"
+local haml = require "haml.init"
 
-local n = 5000
+local n = 10000
 
 local template = [=[
 !!! html
@@ -26,22 +26,22 @@ if arg[2] then
 end
 
 local start = os.clock()
-for i = 1,n do
-  local html = haml.render(template)
+for _ = 1, n do
+  assert(haml.render(template))
 end
 local done = os.clock()
 
 print "Compile and render:"
 print(("%s seconds"):format(done - start))
 
-local phrases       = haml.parse(template)
-local compiled      = haml.compile(phrases)
+local phrases  = haml.parse(template)
+local compiled = haml.compile(phrases)
 
-local start = os.clock()
-for i = 1,n do
+start = os.clock()
+for _ = 1, n do
   haml.render(compiled)
 end
-local done = os.clock()
+done = os.clock()
 
 print "Render:"
 print(("%s seconds"):format(done - start))

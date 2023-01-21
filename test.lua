@@ -1,7 +1,8 @@
-local haml      = require 'haml'
-local json      = require 'json' or
-                  require'dkjson' or
-                  error('not found any json module')
+local haml = require 'haml.init'
+local json = require 'json' or
+    require 'dkjson' or
+    error('not found any json module')
+assert(json)
 
 --[[
 ### Test JSON format ###
@@ -31,67 +32,99 @@ local json      = require 'json' or
   should add tests for this in your implementation's test rather than here.
 * optional: whether or not the test is optional
 --]]
-local path = arg[1] and arg[1] or 'spec/tests.json'
-local abort = arg[2]
 
-local f = assert(io.open(path,'rb'))
-local ctx = f:read("*a")
-f:close()
+local function test_suite(specs)
 
-local j = json.decode(ctx)
+  local f = assert(io.open(specs, 'rb'))
+  local ctx = f:read("*a")
+  f:close()
 
-for k,test in pairs(j) do
-  print('>   TESTING '..k)
-  for K,T in pairs(test) do
-    print('>>  '..K)
-    T.config = T.config or {}
-    --[[
+  local j = json.decode(ctx)
+  local count, fail = 0, 0
+
+  for k, test in pairs(j) do
+    print('>>   TESTING ' .. k)
+    local html
+    for K, T in pairs(test) do
+      T.config = T.config or {}
+      count = count + 1
+      --[[
       "haml"     : "haml input",
       "html"     : "expected html output",
       "result"   : "expected test result",
       "locals"   : "local vars",
       "config"   : "config params",
       "optional" : true|false
-    --]]
+      --]]
 
-    html = haml.render(T.haml, T.config, T.locals)
-    --[[
-    local ret,html = pcall(haml.render,T.haml,cnf,T.locals)
-    if not ret then
-      html = ''
-    end
-    --]]
-    if T.config then
-      local lhtml_compile = require'lhtml'
-      html = assert(lhtml_compile(html))
-      html = table.concat(html,'')
-      html = assert(loadstring(html))
-      local _ret = {}
-      local _ENV = {
-        print = function(...)
-          table.insert(_ret,...)
-        end
-      }
-      setmetatable(_ENV,{__index = _G})
-      local ret
-      if type(setfenv)=='function' then
+      T.config.sort = true
+
+      html = haml.render(T.haml, T.config, T.locals)
+      --[[
+      local ret,html = pcall(haml.render,T.haml,cnf,T.locals)
+      if not ret then
+        html = ''
+      end
+      --]]
+      if T.config then
+        local lhtml_compile = require 'lhtml'
+        html = assert(lhtml_compile(html))
+        html = table.concat(html, '')
+        html = assert(loadstring(html))
+        local _ret = {}
+        local _ENV = {
+          print = function(...)
+            table.insert(_ret, ...)
+          end
+        }
+        setmetatable(_ENV, { __index = _G })
+        if type(setfenv) == 'function' then
           setfenv(html, _ENV)
-          ret = html()
+          html()
+        else
+          html(_ENV)
+        end
+        html = table.concat(_ret, '')
+      end
+      if (html ~= T.html) then
+        print('HAML:' .. T.haml)
+        print(string.format('NEED(%d):%s', #T.html, T.html))
+        print(string.format('BUT (%d):%s', #html, html))
+        fail = fail + 1
+        print('Fail ' .. K);
       else
-          ret = html(_ENV)
+        print('Ok   ' .. K);
       end
-      html = table.concat(_ret,'')
-    end
-    if (html~=T.html ) then
-      print('HAML:'..T.haml)
-      print(string.format('NEED(%d):%s',#T.html,T.html))
-      print(string.format('BUT (%d):%s',#html,html))
-      if abort then
-        print('Fail')
-        return
-      end
-    else
-      print('OK')
     end
   end
+  return count, fail
 end
+
+local function main()
+  local suites = {
+    'spec/tests.json',
+    'spec/tests_ext.json',
+    'spec/tests_lhtml.json',
+  }
+  local all, fail = {}, {}
+  for i = 1, #suites do
+    all[i], fail[i] = test_suite(suites[i])
+  end
+
+  local function count(ary)
+    local ret = 0
+    for i = 1, #ary do
+      ret = ret + ary[i]
+    end
+    return ret
+  end
+
+  local iAll, iFail = count(all), count(fail)
+  if iFail == 0 then
+    print("Test all passed");
+  else
+    print(string.format("Test fail %d in %d, %02d%% passed", iFail, iAll, (100 * (iAll - iFail) / iAll)))
+  end
+end
+
+main()
