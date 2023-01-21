@@ -4,7 +4,6 @@ local ipairs = ipairs
 local next = next
 local pairs = pairs
 local rawset = rawset
-local tostring = tostring
 
 local upper  = string.upper
 local concat = table.concat
@@ -79,15 +78,23 @@ end
 
 local function parse_ruby_style_attributes (a)
   local name = (alnum + P "_")^1
-  local key = (P ":" * C(name)) + (P ":"^-1 * C(quoted_string)) / function (s)
+  local key = (P ":" * C(name)) + (P ":"^-1 * C(quoted_string + name)) / function (s)
     s = s:gsub('[\'"]', "")
     return s
   end
   local value = C(quoted_string + name)
-  local sep = inline_whitespace^0 * P "," * (P " " + eol)^0
-  local assign = P '=>'
-  local pair = Cg(key * inline_whitespace^0 * assign * inline_whitespace^0 * value) * sep^-1
-  local list = S "{" * inline_whitespace^0 * Cf(Ct "" * pair^0, rawset) * inline_whitespace^0 * S "}"
+  local sep = inline_whitespace^0 * P "," * (inline_whitespace ^ 1 + eol)^0
+
+  local values = P "[" * inline_whitespace^0
+                       * Ct(value * (sep * value)^0)
+                       * inline_whitespace^0 * P "]"
+
+  local assign = P '=>' + P ':'
+  local pair = Cg(key * inline_whitespace^0 * assign * inline_whitespace^0
+                      * (values + value) ) * sep^-1
+  local list = P "{" * inline_whitespace^0
+                     * Cf(Ct "" * pair^0, rawset)
+                     * inline_whitespace^0 * P "}"
   return match(list, a) or error(("Could not parse attributes '%s'"):format(a))
 end
 
@@ -180,7 +187,7 @@ local syntax = {
 -- css and tag
   css                 = P{
                         'init',
-                        css_name = S "-_" + alnum^1,
+                        css_name = S "-_/\\" + alnum^1,
                         class    = P "." * Ct(Cg(V'css_name'^1, "class")),
                         id       = P "#" * Ct(Cg(V'css_name'^1, "id")),
                         init     = (V'class' + V'id') * V('init')^0

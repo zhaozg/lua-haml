@@ -5,28 +5,30 @@ local sort = table.sort
 local insert = table.insert
 local concat = table.concat
 local format = string.format
+local tostring = tostring
 
-local function should_auto_close (tag, self_closing_modifier, inline_content, options)
+local function should_auto_close(tag, self_closing_modifier, inline_content, options)
   return self_closing_modifier or options.closed[tag] and options.auto_close and not inline_content
 end
 
-local function handle_code (code, locals)
+local function handle_code(code, locals)
   local f = loadstring(code)
   if f and locals then
     setfenv(f, code)
+  elseif f then
+    return tostring(f())
   end
-  return tostring(f())
 end
 
-local function _recurse (node, options, locals, lvl)
+local function _recurse(node, options, locals, lvl)
   lvl = lvl or 0
-  if type(node) == 'string' or node==nil then
+  if type(node) == 'string' or node == nil then
     return node
   end
   assert(type(node), 'table')
   local tag = node.tag
   local pad = options.tidy and string.rep(options.indent, lvl) or ''
-  local A, B, kT, vT = {}, {}
+  local A, B, kT, vT = {}, {}, nil, nil
   local self_closing_modifier, inline_content = node.self_closing_modifier, node.inline_content
   node.space, node.tag, node.self_closing_modifier, node.inline_content = nil, nil, nil, nil
 
@@ -39,7 +41,7 @@ local function _recurse (node, options, locals, lvl)
     if options.lhaml then
       return '<%= ' .. node.code .. ' %>'
     else
-      handle_code('return '..node.code)
+      handle_code('return ' .. node.code)
     end
   end
   if tag == '-' then
@@ -61,7 +63,7 @@ local function _recurse (node, options, locals, lvl)
       if vT == 'string' then
         B[#B + 1] = options.preserve[tag] and v or pad .. v
       else
-        B[#B + 1] = _recurse(v, options, locals, lvl+1)
+        B[#B + 1] = _recurse(v, options, locals, lvl + 1)
       end
     else
       --attribute
@@ -81,17 +83,20 @@ local function _recurse (node, options, locals, lvl)
               v[i] = format("'%s'", locals and locals[vv] or vv)
             end
           else
-            v[i] = _recurse(vv, options, locals, lvl+1)
+            if k=='class' then
+              v[i] = concat(vv, ' ')
+            else
+              v[i] = _recurse(vv, options, locals, lvl + 1)
+            end
           end
         end
         if k == 'id' then
           v = concat(v, '_'):gsub("'_'", '_')
         else
-          sort(v)
           v = concat(v, ' '):gsub("' '", ' ')
         end
         A[#A + 1] = format('%s=%s', k, v)
-      elseif vT=='boolean' then
+      elseif vT == 'boolean' then
         A[#A + 1] = k
       end
     end
@@ -113,8 +118,8 @@ local function _recurse (node, options, locals, lvl)
       sort(A)
       if should_auto_close(tag, self_closing_modifier, inline_content, options) then
         return options.format == 'xhtml'
-          and format('%s<%s %s />', pad, tag, concat(A, ' '))
-          or format('%s<%s %s>', pad, tag, concat(A, ' '))
+            and format('%s<%s %s />', pad, tag, concat(A, ' '))
+            or format('%s<%s %s>', pad, tag, concat(A, ' '))
       else
         return format('%s<%s %s>%s</%s>', pad, tag, concat(A, ' '), inline_content or '', tag)
       end
@@ -141,23 +146,24 @@ local function _recurse (node, options, locals, lvl)
   end
 end
 
-local function render (dom, options, locals)
+local function render(dom, options, locals)
   local html = _recurse(dom, options, locals, 0)
   html = html:gsub('"#{(.-)}"', "'#{%1}'")
-  local function interpolate_code (str)
+  local function interpolate_code(str)
     return str:gsub('([\\]*)#{(.-)}',
-      function (slashes, match)
+      function(slashes, match)
         if #slashes == 1 then
           return '#{' .. match .. '}'
         else
           local val = locals and locals[match] or match
           if options.lhtml then
-            return '<%='..val..'%>'
+            return '<%=' .. val .. '%>'
           end
           return slashes .. val
         end
       end)
   end
+
   html = interpolate_code(html)
   return html:gsub('\\\\', '\\')
 end
