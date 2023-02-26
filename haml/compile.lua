@@ -5,13 +5,13 @@ local select = select
 local error = error
 local loadstring = loadstring
 local tostring = tostring
-local unpack = table.unpack or unpack
+local unpack = unpack or table.unpack
 local insert = table.insert
 local concat = table.concat
 local format = string.format
 local gsub = string.gsub
 
-local filter = require 'haml.filter'
+local filter = require "haml/filter"
 
 --- Merge two or more tables together.
 -- Duplicate keys cause the value to be added as a table containing all the

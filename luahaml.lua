@@ -1,5 +1,5 @@
 #!/usr/bin/env lua
-local haml = require "haml.init"
+local haml = require "haml/init"
 local VERSION = "0.2.0"
 
 local banner = "LuaHaml %s, copyright Norman Clarke <norman@njclarke.com> 2009-2012"

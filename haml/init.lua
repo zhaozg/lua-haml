@@ -1,7 +1,15 @@
-local parser = require "haml.parser"
-local render = require "haml.render"
-local compile = require "haml.compile"
-local util = require "haml.util"
+--[[lit-meta
+  name = "lua/haml"
+  version = "0.3.9"
+  homepage = "https://github.com/zhaozg/lua-haml"
+  description = "Haml markup language for Lua"
+  tags = { "haml", "html" }
+  license = "MIT"
+]]
+local parser = require "haml/parser"
+local render = require "haml/render"
+local compile = require "haml/compile"
+local util = require "haml/util"
 
 local select = select
 local type = type

@@ -1,4 +1,4 @@
-local haml = require 'haml.init'
+local haml = require "haml/init"
 local json = require 'json' or
     require 'dkjson' or
     error('not found any json module')

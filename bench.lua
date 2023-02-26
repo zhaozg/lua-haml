@@ -1,4 +1,4 @@
-local haml = require "haml.init"
+local haml = require "haml/init"
 
 local n = 10000
 
