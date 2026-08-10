@@ -13,10 +13,14 @@ end
 
 local function handle_code(code, locals)
   local f = loadstring(code)
-  if f and locals then
-    setfenv(f, code)
-  elseif f then
-    return tostring(f())
+  if f then
+    if locals then
+      setfenv(f, locals)
+    end
+    local v = f()
+    if v ~= nil then
+      return tostring(v)
+    end
   end
 end
 
@@ -41,7 +45,9 @@ local function _recurse(node, options, locals, lvl)
     if options.lhaml then
       return '<%= ' .. node.code .. ' %>'
     else
-      handle_code('return ' .. node.code)
+      local out = handle_code('return ' .. node.code, locals)
+      node.code = nil
+      return out or ''
     end
   end
   if tag == '-' then
