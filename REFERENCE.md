@@ -1,1346 +1,1549 @@
-# Haml (HTML Abstraction Markup Language)
+# Lua Haml 语言参考
+
+> **本文档对应 lua-haml v0.4.1**（见 `VERSION`），**不是** Ruby Haml 的官方文档。
+>
+> 原始 Ruby Haml 文档请见上游：<https://haml.info/docs/yardoc/file.REFERENCE.html>
+>
+> **本文所有代码示例均已在本仓库实测验证**（luajit + lpeg）。标注「⚠️ 缺陷」的行为
+> 与 Ruby Haml 不一致，请以本文为准。
+
+Lua Haml 是 [Haml](https://haml.info) 标记语言的 Lua 实现。它沿用 Haml 的**语法**，
+但脚本语言是 **Lua** 而非 Ruby，并且**不实现** Ruby/Rails 特有的特性。
+
+---
+
+## 目录
+
+- [与 Ruby Haml 的差异](#与-ruby-haml-的差异)
+- [架构与使用方式](#架构与使用方式)
+- [安全性说明](#安全性说明)
+- [选项](#选项)
+- [纯文本](#纯文本)
+- [HTML 元素](#html-元素)
+- [属性](#属性)
+- [Class 与 ID](#class-与-id)
+- [空元素](#空元素)
+- [空白移除](#空白移除)
+- [Doctype](#doctype)
+- [注释](#注释)
+- [Lua 求值](#lua-求值)
+- [过滤器](#过滤器)
+- [多行](#多行)
+- [空白保留](#空白保留)
+- [已知缺陷与限制](#已知缺陷与限制)
+
+---
+
+## 与 Ruby Haml 的差异
+
+### 不支持的 Ruby 特性
+
+| 特性 | Ruby Haml 写法 | Lua Haml |
+|---|---|---|
+| 属性方法 | `%html{html_attrs('fr-fr')}` | ❌ 不支持 |
+| 对象引用 | `%div[@user, :greeting]` | ❌ 不支持 |
+| `haml_object_ref` | 自定义对象引用类名 | ❌ 不支持 |
+| `find_and_preserve` | `= find_and_preserve(...)` | ❌ 用 `~` 或 `:preserve` 替代 |
+| Helper 方法 | `surround` / `precede` / `succeed` | ❌ 不支持 |
+| Rails XSS 集成 | `Haml::Template.options` | ❌ 不适用 |
+| Rails / Sinatra / Turbo | 框架集成 | ❌ 不适用 |
+| 编码声明 | `-# coding: utf-8` | ❌ 不支持 |
+| 自定义过滤器注册 | `Haml::Filters::Base` + Temple | ❌ 无注册机制 |
+| 嵌套 `data`/`aria` 展开 | `%a{:data => {:x => 1}}` | ❌ 解析报错 |
+| `:hyphenate_data_attrs` | 选项 | ❌ 不存在 |
+| `:cdata` 选项 | 选项 | ❌ 不存在 |
+| `:autoclose` | 选项 | 改为 `closed` 表 + `auto_close` 开关 |
+
+### 脚本语言差异
+
+- 所有 `=` / `-` / `&=` / `!=` / `~` 后的代码是 **Lua**，不是 Ruby。
+- 块结构使用 Lua 语法（`do ... end`、`for ... do`、`if ... then`），由缩进自动配对。
+- `#{}` 插值是**查表**而非表达式求值。
+
+### 仅实现 8 个过滤器
+
+`:cdata`、`:css`、`:escaped`、`:javascript`、`:lua`、`:markdown`、`:plain`、`:preserve`。
+详见 [过滤器](#过滤器)。
+
+---
+
+## 架构与使用方式
+
+> ⚠️ **这是最容易踩坑的地方。** `haml.render` 单独调用**只产出中间格式**，
+> 动态内容会以 `<% %>` 占位符形式残留，必须经 `lhtml` 二次处理才能真正求值。
+
+### 两阶段管道
+
+```
+Haml 源码
+   │  haml.parse
+   ▼
+  AST
+   │  haml.compile
+   ▼
+编译后 AST
+   │  haml.render(..., { lhaml = true })
+   ▼
+lhtml 字符串（含 <% %> / <%= %> 占位符）
+   │  lhtml(...)
+   ▼
+Lua 源代码（print([===[...]===]) / print(tostring(expr))）
+   │  loadstring(...)()
+   ▼
+最终 HTML
+```
+
+### 推荐用法：使用 CLI
+
+```sh
+lua luahaml.lua my_template.haml > my_template.html
+```
+
+CLI（`luahaml.lua`）已封装全部阶段，是最可靠的使用方式。
 
-Haml is a markup language that's used to cleanly and simply describe the HTML of
-any web document, without the use of inline code. Haml functions as a
-replacement for inline page templating systems such as PHP, ERB, and ASP.
-However, Haml avoids the need for explicitly coding HTML into the template,
-because it is actually an abstract description of the HTML, with some code to
-generate dynamic content.
+### 手动执行完整管道
 
-## Features
+```lua
+local haml  = require "haml/init"
+local lhtml = require "lhtml"
 
-* Whitespace active
-* Well-formatted markup
-* DRY
-* Follows CSS conventions
-* Integrates Ruby code
-* Implements Rails templates with the .haml extension
+local tpl = [[
+- local title = "Hi"
+%h1= title
+%ul
+  - for i = 1, 3 do
+    %li= "item " .. i
+]]
 
-## Using Haml
+-- 阶段 1-3：产出 lhtml 中间字符串
+local mid = haml.render(haml.compile(haml.parse(tpl)), { lhaml = true })
 
-Haml can be used in three ways:
+-- 阶段 4：转换为 Lua 代码
+local code = table.concat(lhtml(mid), "")
 
-* as a command-line tool,
-* as a plugin for Ruby on Rails,
-* and as a standalone Ruby module.
+-- 阶段 5：执行生成代码，得到 HTML
+local html = assert(loadstring(code))()
 
-The first step for all of these is to install the Haml gem:
+io.write(html)
+```
 
-    gem install haml
+输出：
 
-To run Haml from the command line, just use
+```html
+<h1>
+Hi
+</h1>
+<ul>
 
-    haml input.haml output.html
+<li>
+item 1
+</li>
+...
+</ul>
+```
 
-Use `haml --help` for full documentation.
+### 直接调用 `haml.render` 的局限
 
-To use Haml with Rails, add the following line to the Gemfile:
+```lua
+-- 静态内容：正常
+haml.render("%p Hello")
+-- => "<p>Hello</p>\n"
 
-    gem "haml"
+-- 动态内容：locals 可解析时直接求值
+haml.render("%p= greeting", nil, { greeting = "hi" })
+-- => "<p>hi</p>\n"
 
-Once it's installed, all view files with the `".html.haml"` extension will be
-compiled using Haml.
+-- locals 无法解析时，保留占位符交给 lhtml 阶段
+haml.render("%p= title")          -- title 未定义
+-- => "<p><%= title %></p>\n"
+```
 
-You can access instance variables in Haml templates the same way you do in ERB
-templates. Helper methods are also available in Haml templates. For example:
+**求值规则**（`render.lua` 的 `try_code`）：
 
-    # file: app/controllers/movies_controller.rb
+- `options.lhaml` 为 `true` → 一律输出 `<%= %>` 占位符（供两阶段管道使用）
+- 否则 → 尝试用 `locals` 求值
+  - 能 `loadstring` 且执行不报错、结果非 `nil` → 直接内联结果
+  - 否则 → 回退为 `<%= %>` 占位符
 
-    class MoviesController < ApplicationController
-      def index
-        @title = "Teen Wolf"
-      end
-    end
+**因此**：仅依赖 `locals` 的动态模板可以只用 `haml.render`；
+若模板用 `-` 先定义局部变量、再由后续 `=` 引用（同一 Lua chunk 内生效），
+则必须走完整管道或用 CLI。
 
-    -# file: app/views/movies/index.html.haml
+### 位置参数
 
-    #content
-     .title
-       %h1= @title
-       = link_to 'Home', home_url
+```lua
+haml.render(haml_string_or_compiled, options, locals)
+```
 
-may be compiled to:
+| 参数 | 说明 |
+|---|---|
+| 第 1 个 | Haml 字符串，或已编译的 AST 表 |
+| 第 2 个 | 选项表，见 [选项](#选项) |
+| 第 3 个 | `locals` 表，供 `#{}` 插值与属性值解析使用 |
 
-    <div id='content'>
-      <div class='title'>
-        <h1>Teen Wolf</h1>
-        <a href='/'>Home</a>
-      </div>
-    </div>
+### 其他导出函数
 
-### Rails XSS Protection
+| 函数 | 说明 |
+|---|---|
+| `haml.parse(str)` | 解析为 AST |
+| `haml.compile(input, options, locals)` | 编译 AST |
+| `haml.render(input, options, locals)` | 渲染 |
+| `haml.print_r(t)` | 调试打印 AST |
 
-Haml supports Rails' XSS protection scheme, which was introduced in Rails 2.3.5+
-and is enabled by default in 3.0.0+. If it's enabled, Haml's
-{Haml::Options#escape_html `:escape_html`} option is set to `true` by default -
-like in ERB, all strings printed to a Haml template are escaped by default. Also
-like ERB, strings marked as HTML safe are not escaped. Haml also has [its own
-syntax for printing a raw string to the template](#unescaping_html).
+---
 
-If the `:escape_html` option is set to false when XSS protection is enabled,
-Haml doesn't escape Ruby strings by default. However, if a string marked
-HTML-safe is passed to [Haml's escaping syntax](#escaping_html), it won't be
-escaped.
+## 安全性说明
 
-Finally, all the {Haml::Helpers Haml helpers} that return strings that are known
-to be HTML safe are marked as such. In addition, string input is escaped unless
-it's HTML safe.
+> ⚠️ **本节是使用 Lua Haml 前必须阅读的内容。**
 
-### Ruby Module
+### 1. 模板即代码：生成并执行 Lua
 
-Haml can also be used completely separately from Rails and ActionView. To do
-this, install the gem with RubyGems:
+完整管道（[架构与使用方式](#架构与使用方式)）的最后一环是
+`loadstring(generated_code)()`——即**执行由模板生成的 Lua 代码**。
 
-    gem install haml
+此外，`haml/compile.lua` 在以下路径会**直接 `loadstring` 求值**：
 
-You can then use it by including the "haml" gem in Ruby code, and using
-{Haml::Engine} like so:
+- `code_for`（`compile.lua:186`）— 处理 `&=`、`!=`、`~` 等运算符
+- `handle_node`（`compile.lua:208`）— `escape_html = true` 时的 `=` 求值
 
-    engine = Haml::Engine.new("%p Haml code!")
-    engine.render #=> "<p>Haml code!</p>\n"
+**结论：Haml 模板必须视为可信代码，绝不能接受用户上传或用户可控的内容。**
+模板注入等同于**远程代码执行（RCE）**。
 
-### Options
+```lua
+-- 危险：模板内容来自用户输入
+local html = haml.render(user_supplied_template, { lhaml = true })
+-- 后续 lhtml + loadstring 会执行其中任意 Lua
+```
 
-Haml understands various configuration options that affect its performance and
-output.
+### 2. `suppress_eval` 不可用于沙箱
 
-In Rails, options can be set by setting the {Haml::Template#options Haml::Template.options}
-hash in an initializer:
+`haml/init.lua` 声明了 `suppress_eval = false`，但**全代码库无任何引用**（实测验证）：
 
-    # config/initializers/haml.rb
-    Haml::Template.options[:format] = :html5
+```lua
+haml.render("= 1+1", { suppress_eval = true })
+-- => "2"    ← 仍然求值，选项无效
+```
 
-Outside Rails, you can set them by configuring them globally in
-Haml::Options.defaults:
+**不要把它当作安全开关。**
 
-    Haml::Options.defaults[:format] = :html5
+### 3. `setfenv` 不是沙箱
 
-Finally, you can also set them by passing an options hash to
-{Haml::Engine#initialize}. For the complete list of available options, please
-see {Haml::Options}.
+`haml/render.lua` 中 `setfenv(f, locals)` 仅改变全局环境查找。
+若 `locals` 表未严格限制，仍可能通过 `getmetatable`、`string.rep`、
+`loadstring` 等路径逃逸。
 
-### Encodings
+若确实需要沙箱，应：
 
-Haml supports the same sorts of
-encoding-declaration comments that Ruby does. Although both Ruby and Haml
-support several different styles, the easiest it just to add `-# coding:
-encoding-name` at the beginning of the Haml template (it must come before all
-other lines). This will tell Haml that the template is encoded using the named
-encoding.
+1. 在 `locals` 中**显式白名单**允许的函数与变量；
+2. 移除或屏蔽 `loadstring` / `load` / `dofile` / `require` / `os` / `io`；
+3. 考虑在独立进程或受限解释器中渲染。
 
-By default, the HTML generated by Haml has the same encoding as the Haml
-template. However, if `Encoding.default_internal` is set, Haml will attempt to
-use that instead. In addition, the {Haml::Options#encoding `:encoding` option}
-can be used to specify an output encoding manually.
+### 4. `escape_html` 默认关闭
 
-Note that, like Ruby, Haml does not support templates encoded in UTF-16 or
-UTF-32, since these encodings are not compatible with ASCII. It is possible to
-use these as the output encoding, though.
+默认 `escape_html = false`（`haml/init.lua`），`=` 输出**不转义**：
 
-## Plain Text
+```lua
+haml.render("= '<b>x</b>'")                          -- => "<b>x</b>"
+haml.render("= '<b>x</b>'", { escape_html = true })  -- => "&lt;b&gt;x&lt;/b&gt;"
+```
 
-A substantial portion of any HTML document is its content, which is plain old
-text. Any Haml line that's not interpreted as something else is taken to be
-plain text, and passed through unmodified. For example:
+若模板中拼接了不可信数据，必须显式开启 `escape_html`，或改用 `&=`。
 
-    %gee
-      %whiz
-        Wow this is cool!
+### 5. `#{}` 插值不是表达式求值
 
-is compiled to:
+`haml/render.lua` 的实现是 `locals[match]` **直接查表**，不做任何求值
+（实测验证）：
 
-    <gee>
-      <whiz>
-        Wow this is cool!
-      </whiz>
-    </gee>
+| 写法 | `locals` | 输出 | 说明 |
+|---|---|---|---|
+| `#{g}` | `{g="HI"}` | `HI` | ✅ 单键名有效 |
+| `#{g.en}` | `{g={en="HI"}}` | `g.en` | ❌ **点号路径不支持** |
+| `#{1+1}` | `{}` | `1+1` | ❌ 不求值 |
+| `\#{g}` | `{g="HI"}` | `#{g}` | ✅ 反斜杠转义 |
 
-Note that HTML tags are passed through unmodified as well. If you have some HTML
-you don't want to convert to Haml, or you're converting a file line-by-line, you
-can just include it as-is. For example:
+因此：
 
-    %p
-      <div id="blah">Blah!</div>
+- `#{}` 内只能是 `locals` 的**单层键名**，不能是表达式，也不能是点号路径
+- 未命中时回退为原文匹配文本，**可能泄露变量名**
+- 这降低了注入面，但也意味着**不能依赖它做逻辑运算**
 
-is compiled to:
+### 6. 过滤器输出不转义
 
-    <p>
-      <div id="blah">Blah!</div>
-    </p>
+`:plain`、`:lua`、`:preserve`、`:markdown` 的输出**不经过 HTML 转义**。
 
-### Escaping: `\`
+`:markdown` 尤其危险——若 Markdown 源含原始 HTML，会直接注入到输出中。
 
-The backslash character escapes the first character of a line, allowing use of
-otherwise interpreted characters as plain text. For example:
+### 7. 属性值不自动转义
 
-    %title
-      = @title
-      \= @title
+属性值直接拼接，**不经过 `html_escapes` 处理**（实测验证）：
 
-is compiled to:
+```lua
+haml.render("%div{:title => '<b>'}")
+-- => "<div title='<b>'></div>"    ← 未转义
+```
 
-    <title>
-      MyPage
-      = @title
-    </title>
+若属性值来自不可信来源，需自行转义。
 
-## HTML Elements
+---
 
-### Element Name: `%`
+## 选项
 
-The percent character is placed at the beginning of a line. It's followed
-immediately by the name of an element, then optionally by modifiers (see below),
-a space, and text to be rendered inside the element. It creates an element in
-the form of `<element></element>`. For example:
+选项通过 `haml.render(template, options, locals)` 或 `haml.compile(input, options, locals)`
+的第二个参数传入。默认值定义于 `haml/init.lua` 的 `_options` 表。
 
-    %one
-      %two
-        %three Hey there
+### 生效的选项
 
-is compiled to:
+| 选项 | 默认值 | 说明 |
+|---|---|---|
+| `format` | `"xhtml"` | 输出格式：`"xhtml"` / `"html4"` / `"html5"` |
+| `escape_html` | `false` | 为 `true` 时 `=` 输出 HTML 转义 |
+| `auto_close` | `true` | 空元素自动闭合（**注意：不是 `autoclose`**） |
+| `indent` | `"  "` | 缩进字符串（两个空格） |
+| `newline` | `"\n"` | 换行符 |
+| `preserve` | `{ pre = true, textarea = true }` | 需保留空白的标签 |
+| `closed` | 10 个空元素表 | 视为空元素的标签集合，可自定义 |
+| `html_escapes` | 5 项映射 | HTML 转义表 |
+| `encoding` | `"utf-8"` | **仅写入 XML prolog，不做任何转码** |
+| `lhaml` | `nil` | 为 `true` 时输出 lhtml 占位符而非直接求值 |
+| `markdown` | `nil` | 注入 `:markdown` 过滤器使用的函数 |
 
-    <one>
-      <two>
-        <three>Hey there</three>
-      </two>
-    </one>
+### ⚠️ 声明但**无效**的选项
 
-Any string is a valid element name; Haml will automatically generate opening and
-closing tags for any element.
+以下选项在 `_options` 中存在，但**实测无任何效果**，请勿依赖：
 
-### Attributes: `{}` or `()` {#attributes}
+| 选项 | 实测行为 |
+|---|---|
+| `suppress_eval` | 全代码库无引用，设置无效 |
+| `ugly` | 源码注释 "provided for compatiblity; does nothing" |
+| `tidy` | 实测无差异（输出相同） |
+| `attribute_wrapper` | 实测无差异（属性仍用 `'`） |
+| `adapter` | 仅作标识，无行为 |
 
-Brackets represent a Ruby hash that is used for specifying the attributes of an
-element. It is literally evaluated as a Ruby hash, so logic will work in it and
-local variables may be used. Quote characters within the attribute will be
-replaced by appropriate escape sequences. The hash is placed after the tag is
-defined. For example:
+### `closed` 默认值
 
-    %html{:xmlns => "http://www.w3.org/1999/xhtml", "xml:lang" => "en", :lang => "en"}
+```lua
+closed = {
+  area = true, base = true, br = true, col = true, hr = true,
+  img = true, input = true, link = true, meta = true, param = true,
+}
+```
 
-is compiled to:
+自定义示例（实测有效）：
 
-    <html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='en'></html>
+```lua
+haml.render("%foo", { format = "html5", closed = { foo = true } })
+-- => "<foo>"
+```
 
-Attribute hashes can also be stretched out over multiple lines to accommodate
-many attributes. However, newlines may only be placed immediately after commas.
-For example:
+### `html_escapes` 默认值
 
-    %script{:type => "text/javascript",
-            :src  => "javascripts/script_#{2 + 7}"}
+```lua
+html_escapes = {
+  ["'"] = '&#039;',
+  ['"'] = '&quot;',
+  ['&'] = '&amp;',
+  ['<'] = '&lt;',
+  ['>'] = '&gt;',
+}
+```
 
-is compiled to:
+### 关于 `encoding`
 
-    <script src='javascripts/script_9' type='text/javascript'></script>
+`encoding` 选项**仅**用于生成 XML prolog 中的 `encoding` 属性（实测验证）：
 
-#### `:class` and `:id` Attributes {#class-and-id-attributes}
+```lua
+haml.render("!!! XML", { encoding = "gbk" })
+-- => "<?xml version='1.0' encoding='gbk' ?>"
+```
 
-The `:class` and `:id` attributes can also be specified as a Ruby array whose
-elements will be joined together. A `:class` array is joined with `" "` and an
-`:id` array is joined with `"_"`. For example:
+Lua Haml **不做任何字符集转换**。输入与输出的编码由 Lua 字符串本身决定。
 
-    %div{:id => [@item.type, @item.number], :class => [@item.type, @item.urgency]}
+### 选项合并规则
 
-is equivalent to:
+`haml.render` / `haml.compile` 使用 `merge_tables` 合并选项：
+用户传入的选项**逐键覆盖**默认值（浅合并，不递归）。
 
-    %div{:id => "#{@item.type}_#{@item.number}", :class => "#{@item.type} #{@item.urgency}"}
+```lua
+-- 只覆盖 format，其余保持默认
+haml.render(tpl, { format = "html5" })
+```
 
-The array will first be flattened and any elements that do not test as true will
-be removed. The remaining elements will be converted to strings. For example:
+> 注意：`preserve`、`closed`、`html_escapes` 是**整体替换**而非合并。
+> 若需修改其中一项，必须提供完整表。
 
-    %div{:class => [@item.type, @item == @sortcol && [:sort, @sortdir]] } Contents
+---
 
-could render as any of:
+## 纯文本
 
-    <div class="numeric sort ascending">Contents</div>
-    <div class="numeric">Contents</div>
-    <div class="sort descending">Contents</div>
-    <div>Contents</div>
+HTML 文档的很大一部分是纯文本内容。任何未被识别为其他语法的 Haml 行，
+都会作为纯文本原样输出（实测验证）。
 
-depending on whether `@item.type` is `"numeric"` or `nil`, whether `@item == @sortcol`,
-and whether `@sortdir` is `"ascending"` or `"descending"`.
+```haml
+%gee
+  %whiz
+    Wow this is cool!
+```
 
-If a single value is specified and it evaluates to false it is ignored;
-otherwise it gets converted to a string. For example:
+编译为：
 
-    .item{:class => @item.is_empty? && "empty"}
+```html
+<gee>
+<whiz>
+<three>Wow this is cool!</three>
+</whiz>
+</gee>
+```
 
-could render as either of:
+> 注意：默认（`tidy = false`）输出**不带缩进**。
 
-    class="item"
-    class="item empty"
+HTML 标签也会原样传递。若有一段不想转换为 Haml 的 HTML，可直接嵌入：
 
-#### HTML-style Attributes: `()`
+```haml
+%p
+  <div id="blah">Blah!</div>
+```
 
-Haml also supports a terser, less Ruby-specific attribute syntax based on HTML's
-attributes. These are used with parentheses instead of brackets, like so:
+编译为：
 
-    %html(xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en")
+```html
+<p>
+<div id="blah">Blah!</div>
+</p>
+```
 
-Ruby variables can be used by omitting the quotes. Local variables or instance
-variables can be used. For example:
+### 转义：`\`
 
-    %a(title=@title href=href) Stuff
+反斜杠转义行首的第一个字符，使原本会被解释的字符作为纯文本输出。
 
-This is the same as:
+```haml
+%title
+  = title
+  \= title
+```
 
-    %a{:title => @title, :href => href} Stuff
+编译为（`title = "MyPage"` 时）：
 
-Because there are no commas separating attributes, though, more complicated
-expressions aren't allowed. For those you'll have to use the `{}` syntax. You
-can, however, use both syntaxes together:
+```html
+<title>
+MyPage
+= title
+</title>
+```
 
-    %a(title=@title){:href => @link.href} Stuff
+---
 
-You can also use `#{}` interpolation to insert complicated expressions in a
-HTML-style attribute:
+## HTML 元素
 
-    %span(class="widget_#{@widget.number}")
+### 元素名：`%`
 
-HTML-style attributes can be stretched across multiple lines just like
-hash-style attributes:
+百分号置于行首，紧跟元素名，之后可选修饰符、空格和内容（实测验证）。
 
-    %script(type="text/javascript"
-            src="javascripts/script_#{2 + 7}")
+```haml
+%one
+  %two
+    %three Hey there
+```
 
-#### Ruby 1.9-style Hashes
+编译为：
 
-Haml also supports Ruby's new hash syntax:
+```html
+<one>
+<two>
+<three>Hey there</three>
+</two>
+</one>
+```
 
-    %a{title: @title, href: href} Stuff
+任何字符串都是合法的元素名，Haml 会自动生成开闭标签。
 
-#### Attribute Methods
+---
 
-A Ruby method call that returns a hash can be substituted for the hash contents.
-For example, {Haml::Helpers} defines the following method:
+## 属性
 
-    def html_attrs(lang = 'en-US')
-      {:xmlns => "http://www.w3.org/1999/xhtml", 'xml:lang' => lang, :lang => lang}
-    end
+> ⚠️ **重要**：Hash 风格属性使用 **Ruby 语法**（`=>` 或 `key:`），
+> **不是** Lua 表构造器。写作 `{:class => 'foo'}` 或 `{class: 'foo'}`，
+> 写 `{class = 'foo'}` 会**解析报错**。
 
-This can then be used in Haml, like so:
+属性有两种语法：**Hash 风格 `{}`** 和 **HTML 风格 `()`**。
 
-    %html{html_attrs('fr-fr')}
+> ⚠️ 属性值**不自动 HTML 转义**，详见 [安全性说明](#安全性说明)。
 
-This is compiled to:
+### Hash 风格：`{}`
 
-    <html lang='fr-fr' xml:lang='fr-fr' xmlns='http://www.w3.org/1999/xhtml'>
-    </html>
+花括号内是 Ruby 风格的键值对，键前可加 `:`，值可为引号字符串或裸标识符。
 
-You can use as many such attribute methods as you want by separating them with
-commas, like a Ruby argument list. All the hashes will be merged together, from
-left to right. For example, if you defined
+```haml
+%html{:xmlns => "http://www.w3.org/1999/xhtml", 'xml:lang' => "en", :lang => "en"}
+```
 
-    def hash1
-      {:bread => 'white', :filling => 'peanut butter and jelly'}
-    end
+编译为：
 
-    def hash2
-      {:bread => 'whole wheat'}
-    end
+```html
+<html lang='en' xml:lang='en' xmlns='http://www.w3.org/1999/xhtml'></html>
+```
 
-then
+> ℹ️ **属性输出顺序已固定**（v0.4.1）：无论属性来自哪个来源，输出前均按名称**字母序**排序，结果可复现。
 
-    %sandwich{hash1, hash2, :delicious => 'true'}/
+支持两种 Ruby 风格写法（实测均有效）：
 
-would compile to:
+```haml
+%div{:class => 'foo'}
+%div{class: 'foo'}
+```
 
-    <sandwich bread='whole wheat' delicious='true' filling='peanut butter and jelly' />
+含特殊字符的键需加引号：
 
-Note that the Haml attributes list has the same syntax as a Ruby method call.
-This means that any attribute methods must come before the hash literal.
+```haml
+%html{'xml:lang' => 'en'}
+```
 
-Attribute methods aren't supported for HTML-style attributes.
+> 注意：`{xml: 'en'}` 会被解析为键 `xml`（冒号被当作 Ruby 新语法分隔符），
+> 而非 `xml:lang`。
 
-#### Boolean Attributes
+#### 值的语义（实测）
 
-Some attributes, such as "checked" for `input` tags or "selected" for `option`
-tags, are "boolean" in the sense that their values don't matter - it only
-matters whether or not they're present. In HTML (but not XHTML), these
-attributes can be written as
+| 写法 | 行为 |
+|---|---|
+| `{:href => 'u'}` | 输出 `href='u'`（字面值） |
+| `{:href => href}` | 从 `locals` 解析变量，输出 `href='<locals 中的值>'` |
+| `{:class => ['a','b']}` | 数组，用 `" "` 连接 → `class='a b'` |
+| `{:id => ['a','b']}` | 数组，用 `"_"` 连接 → `id='a_b'` |
+| `{:k => true}` | 输出 `k='k'`（xhtml）或裸 `k`（html4/html5） |
+| `{:k => false}` | **省略该属性**（不输出） |
+| `{:k => nil}` | **省略该属性**（不输出） |
+| `{:k => 'false'}` | 引号值视为字符串，输出 `k='false'` |
+| `{:k => v}`（`v` 为 Lua 布尔） | `true` → 裸 `k`；`false` → 省略 |
+| `{:data => {:x => 1}}` | ❌ **解析报错**，嵌套表不支持 |
 
-    <input selected>
+属性表可跨多行书写：
 
-To do this in Haml using hash-style attributes, just assign a Ruby `true` value
-to the attribute:
+```haml
+%script{:type => 'text/javascript',
+  :src => 'a.js'}
+```
 
-    %input{:selected => true}
+编译为：
 
-In XHTML, the only valid value for these attributes is the name of the
-attribute. Thus this will render in XHTML as
+```html
+<script src='a.js' type='text/javascript'></script>
+```
 
-    <input selected='selected'>
+> ⚠️ **缺陷**：多行属性的值**不支持 Lua 表达式拼接**。
+> `{:src => 'script_' .. (2+7)}` 会解析失败。
 
-To set these attributes to false, simply assign them to a Ruby false value. In
-both XHTML and HTML,
+### `:class` 与 `:id` 属性
 
-    %input{:selected => false}
+`class` 与 `id` 可指定为数组，元素会被连接（实测验证）：
 
-will just render as:
+- `class` 数组用 `" "` 连接
+- `id` 数组用 `"_"` 连接
 
-    <input>
+```haml
+%div{:id => ['a', 'b'], :class => ['x', 'y']}
+```
 
-HTML-style boolean attributes can be written just like HTML:
+编译为：
 
-    %input(selected)
+```html
+<div class='x y' id='a_b'></div>
+```
 
-or using `true` and `false`:
+> ⚠️ **与 Ruby Haml 的差异**：Ruby 版会剔除数组中为 `false`/`nil` 的元素，
+> Lua Haml **不做此剔除**。若需条件性 class，请在 Lua 代码中预先构造数组。
 
-    %input(selected=true)
+### HTML 风格：`()`
 
-<!-- The title to the next section (Prefixed Attributes) has changed. This
-<a> tag is so old links to here still work. -->
-<a id="html5_custom_data_attributes" style="border:0;"></a>
+基于 HTML 属性语法的简洁形式，使用圆括号（实测验证）。
 
-#### Prefixed Attributes
+```haml
+%html(xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en")
+```
 
-HTML5 allows for adding
-[custom non-visible data attributes](http://www.whatwg.org/specs/web-apps/current-work/multipage/elements.html#embedding-custom-non-visible-data-with-the-data-*-attributes)
-to elements using attribute names beginning with `data-`. The
-[Accessible Rich Internet Applications](http://www.w3.org/WAI/intro/aria)
-specification makes use of attributes beginning with `aria-`. There are also
-frameworks that use non-standard attributes with a common prefix.
+实现层面：属性值可以是带引号的字符串，或不带引号的裸名称。
 
-Haml can help generate collections of attributes that share a prefix like
-these. Any entry in an attribute hash that has a Hash as its value is expanded
-into a series of attributes, one for each key/value pair in the hash, with the
-attribute name formed by joining the “parent” key name to the key name with a
-hyphen.
+| 写法 | 输出 |
+|---|---|
+| `%div(class='foo')` | `<div class='foo'></div>` |
+| `%input(selected)` | `<input selected />`（裸布尔属性） |
+| `%input(selected=true)` | `<input selected='true' />` |
+| `%a(href=u) x` | `<a href=u>x</a>`（**不解析 locals，原样输出**） |
 
-For example:
+> ⚠️ **注意**：HTML 风格中不带引号的值是**原样透传**，不从 `locals` 解析。
+> 这与 Hash 风格不同。若需变量解析，请用 Hash 风格。
 
-    %a{:href=>"/posts", :data => {:author_id => 123, :category => 7}} Posts By Author
+两种语法可混用：
 
-will render as:
+```haml
+%a(title=t){:href => 'x'}
+```
 
-    <a data-author-id='123' data-category='7' href='/posts'>Posts By Author</a>
+编译为：
 
-Notice that the underscore in `author_id` was replaced by a hyphen. If you wish
-to suppress this behavior, you can set Haml's
-{Haml::Options#hyphenate_data_attrs `:hyphenate_data_attrs` option} to `false`,
-and the output will be rendered as:
+```html
+<a href='x' title='t'></a>
+```
 
-    <a data-author_id='123' data-category='7' href='/posts'>Posts By Author</a>
+> ⚠️ **缺陷**：HTML 风格属性不支持 `#{}` 插值构造值
+> （如 `%span(class="w_#{num}")` 不会被展开为变量拼接）。
 
-This expansion of hashes is recursive – any value of the child hash that is
-itself a hash will create an attribute for each entry, with the attribute name
-prefixed with all ancestor keys. For example:
+### 布尔属性
 
-    .book-info{:data => {:book => {:id => 123, :genre => 'programming'}, :category => 7}}
+> ✅ **v0.4.1 已修复**：`false` / `nil` 会省略属性，`true` 渲染为 `k='k'`（xhtml）。
 
-will render as:
+| 写法 | xhtml（默认） | html5 |
+|---|---|---|
+| `%input(selected)` | `<input selected />` | `<input selected />` |
+| `%input(selected=true)` | `<input selected='selected' />` | `<input selected>` |
+| `%input{:selected => true}` | `<input selected='selected' />` | `<input selected>` |
+| `%input{:selected => false}` | `<input />`（省略） | `<input>`（省略） |
+| `%input{:selected => nil}` | `<input />`（省略） | `<input>`（省略） |
+| `%input{:checked => 'true'}` | `<input checked='true' />` | 同左 |
+| `%input{:checked => 'false'}` | `<input checked='false' />` | 同左 |
 
-    <div class='book-info' data-book-genre='programming' data-book-id='123' data-category='7'></div>
+**规则**（`render.lua` 属性分支）：
 
-### Class and ID: `.` and `#`
+- 值恰为未加引号的 `false` 或 `nil` → 属性被**整个省略**
+- 值恰为未加引号的 `true` → xhtml 下为 `k='k'`，否则为裸 `k`
+- 值带引号（如 `'false'`）→ 视为普通字符串，照原样输出
+- Lua 布尔值（如 `%a(flag)` 产生的 `true`）→ 裸 `k`
 
-The period and pound sign are borrowed from CSS. They are used as shortcuts to
-specify the `class` and `id` attributes of an element, respectively. Multiple
-class names can be specified in a similar way to CSS, by chaining the class
-names together with periods. They are placed immediately after the tag and
-before an attributes hash. For example:
+> ⚠️ 注意：`%a(flag)` 这种「原子属性」在 **xhtml 下也输出裸 `flag`**（而非 `flag='flag'`），
+> 这是保留的旧行为。若严格遵循 XHTML 规范，请改写为 `%a(flag=true)`。
 
-    %div#things
-      %span#rice Chicken Fried
-      %p.beans{ :food => 'true' } The magical fruit
-      %h1.class.otherclass#id La La La
+### 前缀属性（`data-` / `aria-`）
 
-is compiled to:
+> ⚠️ **完全不支持嵌套展开。** Ruby Haml 的 `%a{:data => {:author_id => 123}}`
+> 在 Lua Haml 中会**解析报错**：`Could not parse attributes`。
 
-    <div id='things'>
-      <span id='rice'>Chicken Fried</span>
-      <p class='beans' food='true'>The magical fruit</p>
-      <h1 class='class otherclass' id='id'>La La La</h1>
-    </div>
+若需 data 属性，请直接写完整属性名：
 
-And,
+```haml
+%a{:href => "/posts", 'data-author-id' => 123, 'data-category' => 7} Posts
+```
 
-    %div#content
-      %div.articles
-        %div.article.title Doogie Howser Comes Out
-        %div.article.date 2006-11-05
-        %div.article.entry
-          Neil Patrick Harris would like to dispel any rumors that he is straight
+编译为：
 
-is compiled to:
+```html
+<a data-author-id='123' data-category='7' href='/posts'>Posts</a>
+```
 
-    <div id='content'>
-      <div class='articles'>
-        <div class='article title'>Doogie Howser Comes Out</div>
-        <div class='article date'>2006-11-05</div>
-        <div class='article entry'>
-          Neil Patrick Harris would like to dispel any rumors that he is straight
-        </div>
-      </div>
-    </div>
+> 注意：**没有**下划线自动转连字符功能，也没有 `:hyphenate_data_attrs` 选项。
 
-These shortcuts can be combined with long-hand attributes; the two values will
-be merged together as though they were all placed in an array (see [the
-documentation on `:class` and `:id` attributes](#class-and-id-attributes)). For
-example:
+---
 
-    %div#Article.article.entry{:id => @article.number, :class => @article.visibility}
+## Class 与 ID
 
-is equivalent to
+句点 `.` 和井号 `#` 借自 CSS，分别用于指定 `class` 和 `id` 属性（实测验证）。
 
-    %div{:id => ['Article', @article.number], :class => ['article', 'entry', @article.visibility]} Gabba Hey
+```haml
+%div#things
+  %span#rice Chicken Fried
+  %p.beans{:food => 'true'} The magical fruit
+  %h1.class.otherclass#id La La La
+```
 
-and could compile to:
+编译为：
 
-    <div class="article entry visible" id="Article_27">Gabba Hey</div>
+```html
+<div id='things'>
+<span id='rice'>Chicken Fried</span>
+<p class='beans' food='true'>The magical fruit</p>
+<h1 class='class otherclass' id='id'>La La La</h1>
+</div>
+```
 
-#### Implicit Div Elements
+### 隐式 div
 
-Because divs are used so often, they're the default elements. If you only define
-a class and/or id using `.` or `#`, a div is automatically used. For example:
+由于 div 使用频繁，它是默认元素。若只定义 class 和/或 id，会自动使用 div。
 
-    #collection
-      .item
-        .description What a cool item!
+```haml
+#collection
+  .item
+    .description What a cool item!
+```
 
-is the same as:
+编译为：
 
-    %div#collection
-      %div.item
-        %div.description What a cool item!
+```html
+<div id='collection'>
+<div class='item'>
+<div class='description'>What a cool item!</div>
+</div>
+</div>
+```
 
-and is compiled to:
+### Class 合并与顺序
 
-    <div id='collection'>
-      <div class='item'>
-        <div class='description'>What a cool item!</div>
-      </div>
-    </div>
+实测顺序为：**标签标识符 → Hash 风格数组 → HTML 风格属性**。
 
-### Empty (void) Tags: `/`
+```haml
+%div.foo.moo{:class => ['bar','alpha']}(class='baz')
+```
 
-The forward slash character, when placed at the end of a tag definition, causes
-Haml to treat it as being an empty (or void) element. Depending on the format,
-the tag will be rendered either without a closing tag (`:html4` or `:html5`), or
-as a self-closing tag (`:xhtml`).
+实际输出：
 
-Taking the following as an example:
+```html
+<div class='foo moo bar alpha baz'></div>
+```
 
-    %br/
-    %meta{'http-equiv' => 'Content-Type', :content => 'text/html'}/
+> ⚠️ **与 Ruby Haml 的差异**：Ruby 5.0 的输出是
+> `class='foo moo baz bar alpha'`（HTML 风格在 Hash 之前）。
+> Lua Haml 的顺序不同，且**不是字母序**。
 
-When the format is `:html4` or `:html5` this is compiled to:
+### ⚠️ 缺陷：id 与 class 混合时的畸形输出
 
-    <br>
-    <meta content='text/html' http-equiv='Content-Type'>
+单独合并正常：
 
-and when the format is `:xhtml` it is compiled to:
+```haml
+%div#a{:id => 'b'}      -- => id='a_b'      ✅
+%div.a{:class => 'b'}   -- => class='a b'   ✅
+```
 
-    <br />
-    <meta content='text/html' http-equiv='Content-Type' />
+但同时使用 class 简写 + id 简写 + Hash id 时会畸形：
 
-Some tags are automatically treated as being empty, as long as they have no
-content in the Haml source. `meta`, `img`, `link`, `br`, `hr`, `input`,
-`area`, `param`, `col` and `base` tags are treated as empty by default. This
-list can be customized by setting the {Haml::Options#autoclose `:autoclose`}
-option.
+```haml
+%div#Article.article{:id => 'x'} Gabba
+```
 
-### Whitespace Removal: `>` and `<`
+实际输出（**错误**，属性已按字母序排列）：
 
-`>` and `<` give you more control over the whitespace near a tag. `>` will
-remove all whitespace surrounding a tag, while `<` will remove all whitespace
-immediately within a tag. You can think of them as alligators eating the
-whitespace: `>` faces out of the tag and eats the whitespace on the outside, and
-`<` faces into the tag and eats the whitespace on the inside. They're placed at
-the end of a tag definition, after class, id, and attribute declarations but
-before `/` or `=`. For example:
+```html
+<div class='article' id="'Article' 'x'">Gabba</div>
+```
 
-    %blockquote<
-      %div
-        Foo!
+期望应为 `id="Article_x"`。**请避免这种组合**，改为在 Hash 中一次性写全。
 
-is compiled to:
+---
 
-    <blockquote><div>
-      Foo!
-    </div></blockquote>
+## 空元素
 
-And:
+行尾的正斜杠 `/` 使 Haml 将其视为空（void）元素（实测验证）。
 
-    %img
-    %img>
-    %img
+```haml
+%br/
+%meta{'http-equiv' => 'Content-Type', :content => 'text/html'}/
+```
 
-is compiled to:
+`format = "html5"` 时：
 
-    <img /><img /><img />
+```html
+<br>
+<meta content='text/html' http-equiv='Content-Type'>
+```
 
-And:
+`format = "xhtml"` 时：
 
-    %p<= "Foo\nBar"
+```html
+<br />
+<meta content='text/html' http-equiv='Content-Type' />
+```
 
-is compiled to:
+某些标签在无内容时自动视为空元素（实测验证）：
 
-    <p>Foo
-    Bar</p>
+```haml
+%img            -- xhtml => "<img />"    html5 => "<img>"
+```
 
-And finally:
+默认列表：`meta`、`img`、`link`、`br`、`hr`、`input`、`area`、`param`、`col`、`base`。
 
-    %img
-    %pre><
-      foo
-      bar
-    %img
+该列表可通过 **`closed`** 选项自定义：
 
-is compiled to:
+```lua
+haml.render("%foo", { format = "html5", closed = { foo = true } })
+-- => "<foo>"
+```
 
-    <img /><pre>foo
-    bar</pre><img />
+---
 
-### Object Reference: `[]`
+## 空白移除
 
-Square brackets follow a tag definition and contain a Ruby object that is used
-to set the class and id of that tag. The class is set to the object's class
-(transformed to use underlines rather than camel case) and the id is set to the
-object's class, followed by the value of its `#to_key` or `#id` method (in that
-order). This is most useful for elements that represent instances of Active
-Model models. Additionally, the second argument (if present) will be used as a
-prefix for both the id and class attributes. For example:
+`>` 和 `<` 用于控制标签附近的空白：
 
-    # file: app/controllers/users_controller.rb
+- `>` 移除标签**外部**的所有空白
+- `<` 移除标签**内部**的所有空白
 
-    def show
-      @user = CrazyUser.find(15)
-    end
+可理解为鳄鱼吃空白：`>` 朝外吃外部空白，`<` 朝内吃内部空白。
+它们置于标签定义末尾，在 class、id、属性之后，`/` 或 `=` 之前。
 
-    -# file: app/views/users/show.haml
+`>` 实测有效：
 
-    %div[@user, :greeting]
-      %bar[290]/
-      Hello!
+```haml
+%img
+%img>
+%img
+```
 
-is compiled to:
+编译为：
 
-    <div class='greeting_crazy_user' id='greeting_crazy_user_15'>
-      <bar class='fixnum' id='fixnum_581' />
-      Hello!
-    </div>
+```html
+<img /><img /><img />
+```
 
-If you require that the class be something other than the underscored object's
-class, you can implement the `haml_object_ref` method on the object.
+`<` 移除标签与首/尾子节点之间的空白（v0.4.1 起支持嵌套子元素）：
 
-    # file: app/models/crazy_user.rb
+```haml
+%div<
+  hi
+```
 
-    class CrazyUser < ActiveRecord::Base
-      def haml_object_ref
-        "a_crazy_user"
-      end
-    end
+编译为：
 
-    -# file: app/views/users/show.haml
+```html
+<div>hi</div>
+```
 
-    %div[@user]
-      Hello!
+嵌套子元素同样可用：
 
-is compiled to:
+```haml
+%blockquote<
+  %div
+    Foo!
+```
 
-    <div class='a_crazy_user' id='a_crazy_user_15'>
-      Hello!
-    </div>
+编译为：
 
-The `:class` attribute may be used in conjunction with an object
-reference.  The compiled element will have the union of all classes.
+```html
+<blockquote><div>Foo!</div></blockquote>
+```
 
-    - user = User.find(1)
-    %p[user]{:class => 'alpha bravo'}
-    <p id="user_1" class="alpha bravo user"></p>
+> 精确语义：`<` 只去掉**包裹标签与子内容之间**的换行，并向下递归；
+> **同级子节点之间仍保留换行**。因此：
+>
+> ```haml
+> %p<
+>   hello
+>   world
+> ```
+> → `<p>hello\nworld</p>`
+>
+> ```haml
+> %ul<
+>   %li a
+>   %li b
+> ```
+> → `<ul><li>a</li>\n<li>b</li></ul>`
 
-## Doctype: `!!!`
+> ℹ️ 修饰符必须写在属性**之后**：`%div.a{:id => 'i'}<` 正确，
+> `%div.a<{:id => 'i'}` 不会解析属性。
 
-When describing HTML documents with Haml, you can have a document type or XML
-prolog generated automatically by including the characters `!!!`. For example:
+---
 
-    !!! XML
-    !!!
-    %html
-      %head
-        %title Myspace
-      %body
-        %h1 I am the international space station
-        %p Sign my guestbook
+## Doctype
 
-is compiled to:
+用 `!!!` 自动生成文档类型或 XML prolog（实测验证）。
 
-    <?xml version='1.0' encoding='utf-8' ?>
-    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-    <html>
-      <head>
-        <title>Myspace</title>
-      </head>
-      <body>
-        <h1>I am the international space station</h1>
-        <p>Sign my guestbook</p>
-      </body>
-    </html>
+```haml
+!!! XML
+!!!
+%html
+  %head
+    %title Myspace
+```
 
-You can also specify the specific doctype after the `!!!` When the
-{Haml::Options#format `:format`} is set to `:xhtml`. The following doctypes are
-supported:
+编译为（默认 `format = "xhtml"`）：
 
-`!!!`
-: XHTML 1.0 Transitional<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">`
+```html
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+<head>
+<title>Myspace</title>
+</head>
+</html>
+```
 
-`!!! Strict`
-: XHTML 1.0 Strict<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">`
+### `format = "xhtml"` 时支持的 doctype（实测）
 
-`!!! Frameset`
-: XHTML 1.0 Frameset<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Frameset//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd">`
+| 写法 | 结果 |
+|---|---|
+| `!!!` | XHTML 1.0 Transitional |
+| `!!! Strict` | XHTML 1.0 Strict |
+| `!!! Frameset` | XHTML 1.0 Frameset |
+| `!!! 5` | `<!DOCTYPE html>` |
+| `!!! 1.1` | XHTML 1.1 |
+| `!!! Basic` | XHTML Basic 1.1 |
+| `!!! Mobile` | XHTML Mobile 1.2 |
+| `!!! RDFa` | ⚠️ 回退为 XHTML 1.0 Transitional（**不支持 RDFa**） |
 
-`!!! 5`
-: XHTML 5<br/>
- `<!DOCTYPE html>`<br/>
+### `format = "html4"` 时支持的 doctype（实测）
 
-`!!! 1.1`
-: XHTML 1.1<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">`
+| 写法 | 结果 |
+|---|---|
+| `!!!` | HTML 4.01 Transitional |
+| `!!! Strict` | HTML 4.01 Strict |
+| `!!! Frameset` | HTML 4.01 Frameset |
+| `!!! 5` | `<!DOCTYPE html>` |
+| `!!! 1.1` | ⚠️ 输出 **XHTML 1.1**（跨格式泄漏，实现瑕疵） |
+| `!!! Basic` / `Mobile` / `RDFa` | ⚠️ 回退为 HTML 4.01 Transitional |
 
-`!!! Basic`
-: XHTML Basic 1.1<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.1//EN" "http://www.w3.org/TR/xhtml-basic/xhtml-basic11.dtd"> `
+### `format = "html5"` 时
 
-`!!! Mobile`
-: XHTML Mobile 1.2<br/>
- `<!DOCTYPE html PUBLIC "-//WAPFORUM//DTD XHTML Mobile 1.2//EN" "http://www.openmobilealliance.org/tech/DTD/xhtml-mobile12.dtd">`
+`!!!` 及其任何变体**始终**为 `<!DOCTYPE html>`（实测全部变体一致）。
 
-`!!! RDFa`
-: XHTML+RDFa 1.0<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN" "http://www.w3.org/MarkUp/DTD/xhtml-rdfa-1.dtd">`
+### XML prolog 编码
 
-When the {Haml::Options#format `:format`} option is set to `:html4`, the following
-doctypes are supported:
+```haml
+!!! XML iso-8859-1
+```
 
-`!!!`
-: HTML 4.01 Transitional<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">`
+编译为：
 
-`!!! Strict`
-: HTML 4.01 Strict<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">`
+```html
+<?xml version='1.0' encoding='iso-8859-1' ?>
+```
 
-`!!! Frameset`
-: HTML 4.01 Frameset<br/>
- `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN" "http://www.w3.org/TR/html4/frameset.dtd">`
+> 注意：这**仅影响 prolog 文本**，Lua Haml 不做实际转码。
 
-When the {Haml::Options#format `:format`} option is set to `:html5`,
-`!!!` is always `<!DOCTYPE html>`.
+---
 
-If you're not using the UTF-8 character set for your document, you can specify
-which encoding should appear in the XML prolog in a similar way. For example:
+## 注释
 
-    !!! XML iso-8859-1
+Haml 支持两种注释：输出到 HTML 的，和不输出的（实测验证）。
 
-is compiled to:
+### HTML 注释：`/`
 
-    <?xml version='1.0' encoding='iso-8859-1' ?>
+```haml
+/ hi
+```
 
-If the mime_type of the template being rendered is `text/xml` then a format of
-`:xhtml` will be used even if the global output format is set to `:html4` or
-`:html5`.
+编译为：
 
-## Comments
+```html
+<!-- hi -->
+```
 
-Haml supports two sorts of comments: those that show up in the HTML output and
-those that don't.
+正斜杠也可包裹缩进块：
 
-### HTML Comments: `/`
+```haml
+/
+  %p This doesn't render
+```
 
-The forward slash character, when placed at the beginning of a line, wraps all
-text after it in an HTML comment. For example:
+编译为：
 
-    %peanutbutterjelly
-      / This is the peanutbutterjelly element
-      I like sandwiches!
+```html
+<!--
+<p>This doesn't render</p>
+-->
+```
 
-is compiled to:
+### 条件注释：`/[]`
 
-    <peanutbutterjelly>
-      <!-- This is the peanutbutterjelly element -->
-      I like sandwiches!
-    </peanutbutterjelly>
+```haml
+/[if IE]
+  %a x
+```
 
-The forward slash can also wrap indented sections of code. For example:
+编译为：
 
-    /
-      %p This doesn't render...
-      %div
-        %h1 Because it's commented out!
+```html
+<!--[if IE]>
+<a>x</a>
+<![endif]-->
+```
 
-is compiled to:
+要生成「downlevel-revealed」条件注释，在方括号前加 `!`：`/![]`。
 
-    <!--
-      <p>This doesn't render...</p>
-      <div>
-        <h1>Because it's commented out!</h1>
-      </div>
-    -->
+```haml
+/![if !IE]
+  You are not using IE.
+```
 
-#### Conditional Comments: `/[]`
+编译为：
 
-You can also use [Internet Explorer conditional
-comments](http://www.quirksmode.org/css/condcom.html) by enclosing the condition
-in square brackets after the `/`. For example:
+```html
+<!--[if !IE]><!-->
+You are not using IE.
+<!--<![endif]-->
+```
 
-    /[if IE]
-      %a{ :href => 'http://www.mozilla.com/en-US/firefox/' }
-        %h1 Get Firefox
+### Haml 注释：`-#`
 
-is compiled to:
+连字符紧跟井号表示静默注释，其后内容完全不输出。
 
-    <!--[if IE]>
-      <a href='http://www.mozilla.com/en-US/firefox/'>
-        <h1>Get Firefox</h1>
-      </a>
-    <![endif]-->
+```haml
+%p foo
+-# This is a comment
+%p bar
+```
 
-To generate “downlevel-revealed” conditional comments, where the content is
-hidden from IE but not other browsers,  add a `!` before the brackets: `/![]`.
-Haml will produce valid HTML when generating this kind of conditional comment.
+编译为：
 
-For example:
+```html
+<p>foo</p>
+<p>bar</p>
+```
 
-    /![if !IE]
-      You are not using Internet Explorer, or are using version 10+.
+---
 
-is compiled to:
+## Lua 求值
 
-    <!--[if !IE]><!-->
-      You are not using Internet Explorer, or are using version 10+.
-    <!--<![endif]-->
+> ⚠️ 本节所有代码均为 **Lua**，不是 Ruby。
+>
+> ⚠️ 求值时机取决于选项：
+>
+> - `options.lhaml = true` → **不求值**，一律输出 `<%= %>` 占位符（两阶段管道）
+> - 默认 → **尝试立即求值**；依赖 `locals` 无法解析时回退为占位符
+>
+> 独立成行的 `&=` / `!=` / `~` 在 `compile.lua` 中总是**立即 `loadstring` 求值**。
 
-### Haml Comments: `-#`
+### 插入 Lua：`=`
 
-The hyphen followed immediately by the pound sign signifies a silent comment.
-Any text following this isn't rendered in the resulting document at all.
+独立成行的 `=` 立即求值：
 
-For example:
+```haml
+= 1 + 1
+```
 
-    %p foo
-    -# This is a comment
-    %p bar
+编译为：
 
-is compiled to:
+```html
+2
+```
 
-    <p>foo</p>
-    <p>bar</p>
+`%tag= expr` 形式在 `locals` 可解析时直接内联（v0.4.1 修复）：
 
-You can also nest text beneath a silent comment. None of this text will be
-rendered. For example:
+```lua
+haml.render("%p= greeting", nil, { greeting = "hi" })
+-- => "<p>hi</p>"
 
-    %p foo
-    -#
-      This won't be displayed
-        Nor will this
-                       Nor will this.
-    %p bar
+haml.render("%p= 1 + 1")
+-- => "<p>2</p>"
+```
 
-is compiled to:
+`locals` 无法解析（如变量未定义）时，回退为占位符，交给 `lhtml` 阶段：
 
-    <p>foo</p>
-    <p>bar</p>
+```lua
+haml.render("%p= title")            -- title 未定义
+-- => "<p><%= title %></p>"
+```
 
-## Ruby Evaluation
+这正是 CLI / 两阶段管道的需要：模板里 `-` 定义的局部变量只能在同一 Lua chunk 内可见。
+经 CLI 验证：
 
-### Inserting Ruby: `=`
+```haml
+%h1= title
+```
 
-The equals character is followed by Ruby code. This code is evaluated and the
-output is inserted into the document. For example:
+输出：
 
-    %p
-      = ['hi', 'there', 'reader!'].join " "
-      = "yo"
+```html
+<h1>Hi</h1>
+```
 
-is compiled to:
+若 `escape_html` 选项为 `true`，`=` 会转义 HTML 敏感字符（实测验证）：
 
-    <p>
-      hi there reader!
-      yo
-    </p>
+```lua
+haml.render("= '<b>x</b>'")                          -- => "<b>x</b>"
+haml.render("= '<b>x</b>'", { escape_html = true })  -- => "&lt;b&gt;x&lt;/b&gt;"
+```
 
-If the {Haml::Options#escape_html `:escape_html`} option is set, `=` will sanitize
-any HTML-sensitive characters generated by the script. For example:
+> 注意：以 `=` 结尾的标签内**不允许**再嵌套代码。
 
-    = '<script>alert("I\'m evil!");</script>'
+### 执行 Lua：`-`
 
-would be compiled to
+连字符后跟 Lua 代码，代码被求值但**不**插入文档。
 
-    &lt;script&gt;alert(&quot;I'm evil!&quot;);&lt;/script&gt;
+> **不建议广泛使用**；几乎所有处理逻辑应放在 Lua 代码中，而非模板里。
 
-`=` can also be used at the end of a tag to insert Ruby code within that tag.
-For example:
+> ⚠️ **缺陷（实测）**：裸 `-` 语句在 `haml.render` 中会**泄漏 `<% %>` 占位符到输出**：
+>
+> | 写法 | `haml.render` 直接输出 |
+> |---|---|
+> | `- foo = 1` | `<% foo = 1 %>` |
+> | `- if true then` + 子节点 | `<% if true then %>\n<p>a</p>` |
+>
+> 只有走完整管道（CLI）才会正确消除占位符。
 
-    %p= "hello"
+经 CLI 验证的有效用法：
 
-would be compiled to:
+```haml
+- local title = "Hi"
+%h1= title
+```
 
-    <p>hello</p>
+### Lua 块
 
-A line of Ruby code can be stretched over multiple lines as long as each line
-but the last ends with a comma. For example:
+Lua 块与 HTML 标签一样，无需显式闭合，而是**根据缩进自动配对**
+（`compile.lua` 的 `match_block`）。
 
-    = link_to_remote "Add to cart",
-        :url => { :action => "add", :id => product.id },
-        :update => { :success => "cart", :failure => "error" }
+```haml
+- for i = 1, 3 do
+  %li= "item " .. i
+```
 
-Note that it's illegal to nest code within a tag that ends with `=`.
+经 CLI 输出：
 
-### Running Ruby: `-`
+```html
+<li>
+item 1
+</li>
+<li>
+item 2
+</li>
+<li>
+item 3
+</li>
+```
 
-The hyphen character is also followed by Ruby code. This code is evaluated but
-*not* inserted into the document.
+条件分支：
 
-**It is not recommended that you use this widely; almost all processing code and
-logic should be restricted to Controllers, Helpers, or partials.**
+```haml
+- if x == 1 then
+  = "1!"
+- elseif x == 2 then
+  = "2?"
+- else
+  = "3."
+```
 
-For example:
+### 空白保留：`~`
 
-    - foo = "hello"
-    - foo << " there"
-    - foo << " you!"
-    %p= foo
+`~` 与 `=` 类似，但会对输入执行空白保留（实测验证）。
 
-is compiled to:
+```lua
+haml.render("~ 'a\\nb'")
+-- => "a\nb"                      ← pre 之外不生效
 
-    <p>
-      hello there you!
-    </p>
+haml.render("~ '<pre>a\\nb</pre>'")
+-- => "<pre>a&#x000A;b</pre>"     ← pre 内换行转为 &#x000A;
+```
 
-A line of Ruby code can be stretched over multiple lines as long as each line
-but the last ends with a comma. For example:
+即：`~` 仅对 `preserve` 选项中的标签（默认 `pre`、`textarea`）生效。
 
-    - links = {:home => "/",
-        :docs => "/docs",
-        :about => "/about"}
+参见 [空白保留](#空白保留)。
 
-#### Ruby Blocks
+### 字符串插值：`#{}`
 
-Ruby blocks, like XHTML tags, don't need to be explicitly closed in Haml.
-Rather, they're automatically closed, based on indentation. A block begins
-whenever the indentation is increased after a Ruby evaluation command. It ends
-when the indentation decreases (as long as it's not an `else` clause or
-something similar). For example:
+> ⚠️ **重要差异**：Lua 无原生字符串插值。Lua Haml 的 `#{}` 是
+> **对 `locals` 表做单层查表**，不是表达式求值，**不支持点号路径**。
+> 详见 [安全性说明第 5 条](#5--插值不是表达式求值)。
 
-    - (42...47).each do |i|
-      %p= i
-    %p See, I can count!
+```lua
+-- ✅ 单键名有效：locals 作为第 3 个参数传入
+haml.render("%p This is #{g}!", nil, { g = "hi" })
+-- => "<p>This is hi!</p>"
 
-is compiled to:
+-- ❌ 点号路径无效
+haml.render("%p #{g.en}", nil, { g = { en = "HI" } })
+-- => "<p>g.en</p>"
 
-    <p>42</p>
-    <p>43</p>
-    <p>44</p>
-    <p>45</p>
-    <p>46</p>
-    <p>See, I can count!</p>
+-- ❌ 表达式不求值
+haml.render("%p #{1+1}", nil, {})
+-- => "<p>1+1</p>"
+```
 
-Another example:
+**使用要点**：
 
-    %p
-      - case 2
-      - when 1
-        = "1!"
-      - when 2
-        = "2?"
-      - when 3
-        = "3."
+1. `#{}` 内只能是 `locals` 的**单层键名**
+2. 必须在**调用时**把 `locals` 表作为第 3 个参数传入（实测）：
 
-is compiled to:
+```lua
+haml.render("%p #{hello}", nil, { hello = "hello world!" })
+-- => "<p>hello world!</p>"
+```
 
-    <p>
-      2?
-    </p>
+> ⚠️ 在模板内写 `- locals.g = 'hi'` **不能**创建可用插值变量，
+> 该赋值只会落到全局表，`#{g}` 仍回退为字面量 `g`。
 
-### Whitespace Preservation: `~` {#tilde}
+3. 反斜杠可转义 `#{}`（实测验证）：
 
-`~` works just like `=`, except that it runs {Haml::Helpers#find\_and\_preserve}
-on its input. For example,
+```lua
+haml.render("%p \\#{g}", nil, { g = "HI" })
+-- => "<p>#{g}</p>"
+```
 
-    ~ "Foo\n<pre>Bar\nBaz</pre>"
+插值也可用于[过滤器](#过滤器)中。
 
-is the same as:
+#### 注意事项
 
-    = find_and_preserve("Foo\n<pre>Bar\nBaz</pre>")
+`#{}` 的匹配使用简单模式 `([\\]*)#{(.-)}`（`render.lua:159`），
+而非完整 Lua 解析器。因此：
 
-and is compiled to:
+- 嵌套花括号可能匹配错误
+- 含 `}` 的内容会被截断
 
-    Foo
-    <pre>Bar&#x000A;Baz</pre>
+**推荐做法**：复杂逻辑先在 Lua 中算好，存入 `locals`（用扁平键名），再插值。
 
-See also [Whitespace Preservation](#whitespace_preservation).
+### 转义 HTML：`&=`
 
-### Ruby Interpolation: `#{}`
+`&=` 求值 Lua 代码，并对结果中的 HTML 敏感字符转义（实测验证）。
 
-Ruby code can also be interpolated within plain text using `#{}`, similarly to
-Ruby string interpolation. For example,
+```lua
+haml.render("&= '<b>x</b>'")
+-- => "&lt;b&gt;x&lt;/b&gt;"
+```
 
-    %p This is #{h quality} cake!
+若 `escape_html` 选项为 `true`，`&=` 与 `=` 行为相同。
 
-is the same as
+`&` 也可单独使用，使 `#{}` 插值被转义。
 
-    %p= "This is #{h quality} cake!"
+#### 行内 `&=`（v0.4.1 起支持）
 
-and might compile to:
+```lua
+haml.render("%p&= x", nil, { x = "<b>" })
+-- => "<p>&lt;b&gt;</p>"
+```
 
-    <p>This is scrumptious cake!</p>
+以前 `%p&= x` 会被当作纯文本输出 `<p>&= x</p>`。
 
-Backslashes can be used to escape `#{}` strings, but they don't act as escapes
-anywhere else in the string. For example:
+> ⚠️ 行内 `&=` / `!=` 必须能由 `locals` 解析，否则输出空串。
 
-    %p
-      Look at \\#{h word} lack of backslash: \#{foo}
-      And yon presence thereof: \{foo}
+### 不转义 HTML：`!=`
 
-might compile to:
+`!=` 求值 Lua 代码，且**永不**转义 HTML（实测验证）。
 
-    <p>
-      Look at \yon lack of backslash: #{foo}
-      And yon presence thereof: \{foo}
-    </p>
+```lua
+haml.render("!= '<b>x</b>'", { escape_html = true })
+-- => "<b>x</b>"
+```
 
-Interpolation can also be used within [filters](#filters). For example:
+默认情况下单个 `=` 也不转义。但若 `escape_html` 为 `true`，
+`=` 会转义而 `!=` 不会。
 
-    :javascript
-      $(document).ready(function() {
-        alert(#{@message.to_json});
-      });
+`!` 也可单独使用，使 `#{}` 插值不被转义。
 
-might compile to:
+#### 行内 `!=`（v0.4.1 起支持）
 
-    <script type='text/javascript'>
-      //<![CDATA[
-        $(document).ready(function() {
-          alert("Hi there!");
-        });
-      //]]>
-    </script>
+```lua
+haml.render("%p!= x", { escape_html = true }, { x = "<b>" })
+-- => "<p><b></p>"
+```
 
-#### Gotchas
+---
 
-Haml uses an overly simplistic regular expression to identify string
-interpolation rather than a full-blown Ruby parser. This is fast and works for
-most code but you may have errors with code like the following:
+## 过滤器
 
-    %span #{'{'}
+冒号表示过滤器。它将缩进块作为输入传给过滤程序，结果加入输出。
 
-This code will generate a syntax error, complaining about unbalanced brackets.
-In cases like this, the recommended workaround is output the code as a Ruby
-string to force Haml to parse the code with Ruby.
+```haml
+%content
+  :markdown
+    # Greetings
 
-    %span= "#{'{'}"
+    Hello, *World*
+```
 
+### 支持的过滤器（实测验证，共 8 个）
 
-### Escaping HTML: `&=` {#escaping_html}
+仅 `haml/filter.lua` 中 `_filters` 表登记以下 8 个：
 
-An ampersand followed by one or two equals characters evaluates Ruby code just
-like the equals without the ampersand, but sanitizes any HTML-sensitive
-characters in the result of the code. For example:
+| 过滤器 | 实测行为 | 依赖 |
+|---|---|---|
+| `:cdata` | 包裹 `<![CDATA[ ... ]]>` | — |
+| `:css` | 包裹 `<style>`；`xhtml` 下另加 `/*<![CDATA[*/` | — |
+| `:escaped` | HTML 转义后输出 | — |
+| `:javascript` | 包裹 `<script>`；`xhtml` 下另加 `//<![CDATA[` | — |
+| `:lua` | 原样输出（**不执行**） | — |
+| `:markdown` | Markdown 转 HTML | `markdown` 模块或 `options.markdown` |
+| `:plain` | 原样输出，不解析 | — |
+| `:preserve` | 保留空白（`\n`→`&#x000A;`，`\r`→`&#x000D;`） | — |
 
-    &= "I like cheese & crackers"
+#### `:cdata`（实测）
 
-compiles to
+```lua
+haml.render(":cdata\n  x<y")
+-- => "<![CDATA[\n  x<y\n]]>"     ← 保留原始缩进
+```
 
-    I like cheese &amp; crackers
+#### `:css`（实测）
 
-If the {Haml::Options#escape_html `:escape_html`} option is set, `&=` behaves
-identically to `=`.
+```lua
+-- html5：不加 CDATA（保留原始缩进）
+haml.render(":css\n  body{color:red}", { format = "html5" })
+-- => "<style>\n  body{color:red}\n</style>"
 
-`&` can also be used on its own so that `#{}` interpolation is escaped. For
-example,
+-- xhtml（默认格式）：加 CDATA
+haml.render(":css\n  a{}")
+-- => "<style type='text/css'>\n/*<![CDATA[*/\n  a{}\n/*]]>*/\n</style>"
+```
 
-    & I like #{"cheese & crackers"}
+> ⚠️ **差异**：Ruby 版有 `:cdata` 选项控制何时加 CDATA。
+> Lua Haml 无此选项，仅按 `format == "xhtml"` 硬编码。
 
-compiles to:
+#### `:escaped`（实测）
 
-    I like cheese &amp; crackers
+```lua
+haml.render(":escaped\n  x<y")
+-- => "x&lt;y"
+```
 
-### Unescaping HTML: `!=` {#unescaping_html}
+#### `:javascript`（实测）
 
-An exclamation mark followed by one or two equals characters evaluates Ruby code
-just like the equals would, but never sanitizes the HTML.
+```lua
+-- xhtml（默认格式）：加 CDATA
+haml.render(":javascript\n  alert(1);")
+-- => "<script type='text/javascript'>\n//<![CDATA[\n  alert(1);\n//]]>\n</script>"
 
-By default, the single equals doesn't sanitize HTML either. However, if the
-{Haml::Options#escape_html `:escape_html`} option is set, `=` will sanitize the
-HTML, but `!=` still won't. For example, if `:escape_html` is set:
+-- html5：不加 CDATA
+haml.render(":javascript\n  alert(1);", { format = "html5" })
+-- => "<script>\nalert(1);\n</script>"
+```
 
-    = "I feel <strong>!"
-    != "I feel <strong>!"
+#### `:lua`（实测）
 
-compiles to
+原样输出内容，**不执行** Lua（`code_filter` 直接返回 `node.content`）。
 
-    I feel &lt;strong&gt;!
-    I feel <strong>!
+```lua
+haml.render(":lua\n  x<y")
+-- => "  x<y"     ← 保留缩进（与 :plain 不同，后者会去缩进）
+```
 
-`!` can also be used on its own so that `#{}` interpolation is unescaped.
-For example,
+> 这是 Lua Haml 特有的过滤器名。Ruby 版的 `:ruby` 会执行代码，此处不会。
 
-    ! I feel #{"<strong>"}!
+#### `:markdown`（实测）
 
-compiles to
+```lua
+haml.render(":markdown\n  # hi")
+-- => "\n<p>  # hi</p>\n"     ← 需正确的 markdown 模块；无模块时行为退化
+```
 
-    I feel <strong>!
+推荐注入：
 
-## Filters {#filters}
+```lua
+local html = haml.render(tpl, { markdown = require("markdown") })
+```
 
-The colon character designates a filter. This allows you to pass an indented
-block of text as input to another filtering program and add the result to the
-output of Haml. The syntax is simply a colon followed by the name of the filter.
-For example:
+> ⚠️ **安全提示**：`:markdown` 的输出**不经过 HTML 转义**。
 
-    %p
-      :markdown
-        # Greetings
+#### `:plain`（实测）
 
-        Hello, *World*
+```lua
+haml.render(":plain\n  x<y")
+-- => "x<y"
+```
 
-is compiled to:
+#### `:preserve`（实测）
 
-    <p>
-      <h1>Greetings</h1>
+```lua
+haml.render(":preserve\n  a\n  b")
+-- => "a&#x000A;b"
+```
 
-      <p>Hello, <em>World</em></p>
-    </p>
+### 未实现的过滤器
 
-Filters can have Ruby code interpolated with `#{}`. For example:
+以下 Ruby Haml 过滤器**不存在**，使用会抛错 `No such filter "xxx"`（实测全部确认）：
 
-    - flavor = "raspberry"
-    #content
-      :textile
-        I *really* prefer _#{flavor}_ jam.
+`:sass`、`:scss`、`:erb`、`:ruby`、`:coffee`、`:less`、`:textile`、`:maruku`
 
-is compiled to
+### 自定义过滤器
 
-    <div id='content'>
-      <p>I <strong>really</strong> prefer <em>raspberry</em> jam.</p>
-    </div>
+> ⚠️ **与 Ruby Haml 的差异**：Ruby 5.x 提供 `Haml::Filters::Base` 基类
+> 与 `Haml::Filters.registered` 注册表，可返回 Temple 表达式。
+> **Lua Haml 无过滤器注册机制**——`_filters` 是 `haml/filter.lua` 内的局部表，
+> 未对外暴露。
 
-Note that `#{}` interpolation within filters is HTML-escaped if you specify
-{Haml::Options#escape_html `:escape_html`} option.
+若需扩展，只能修改 `haml/filter.lua` 源码，在 `_filters` 表中添加：
 
-The functionality of some filters such as Markdown can be provided by many
-different libraries. Usually you don't have to worry about this - you can just
-load the gem of your choice and Haml will automatically use it.
+```lua
+-- haml/filter.lua
+local function my_filter(node, options, parent)
+  return node.content  -- 返回字符串，或修改 node 后返回
+end
 
-However in some cases you may want to make Haml explicitly use a specific gem to
-be used by a filter. In these cases you can do this via Tilt, the library Haml
-uses to implement many of its filters:
+local _filters = {
+  -- ... 现有过滤器
+  myfilter = my_filter,
+}
+```
 
-    Tilt.prefer Tilt::RedCarpetTemplate
+过滤器函数签名：`func(node, options, parent)`
 
-See the [Tilt documentation](https://github.com/rtomayko/tilt#fallback-mode) for
-more info.
+- `node.content`：过滤块的原始文本
+- `node.space`：缩进字符串
+- `options`：当前选项表
+- `parent`：父节点（可能为 nil）
 
-Haml comes with the following filters defined:
+---
 
-### `:cdata` {#cdata-filter}
+## 多行
 
-Surrounds the filtered text with CDATA tags.
+管道符 `|` 表示多行字符串。置于行尾，表示所有以 `|` 结尾的后续行
+会被当作同一行处理（v0.4.1 已修复，之前续行会丢失）。
 
-### `:coffee` {#coffee-filter}
+```haml
+%p= 1 + |
+  2 |
+```
 
-Compiles the filtered text to JavaScript in `<script>` tag using CoffeeScript.
-You can also reference this filter as `:coffeescript`. This filter is
-implemented using Tilt.
+编译为：
 
-### `:css` {#css-filter}
+```html
+<p>3</p>
+```
 
-Surrounds the filtered text with `<style>` and (optionally) CDATA tags. Useful
-for including inline CSS. Use the {Haml::Options#cdata `:cdata` option} to
-control when CDATA tags are added.
+**规则**：
 
-### `:erb` {#erb-filter}
+- 首行必须以 `|` 结尾，否则 `|` 视为普通字符
+- 每条**续行也必须以 `|` 结尾**（包括最后一行）
+- 续行必须缩进（至少一个空格）
+- 拼接时 `|` 及其两侧空白被替换为单个空格，行尾空白被去掉
+- 支持：行首 `=` / `-` 等脚本、`%tag= expr`、以及普通行内文本
 
-Parses the filtered text with ERB, like an RHTML template. Not available if the
-{Haml::Options#suppress_eval `:suppress_eval`} option is set to true. Embedded
-Ruby code is evaluated in the same context as the Haml template. This filter is
-implemented using Tilt.
+示例：
 
-### `:escaped` {#escaped-filter}
+```haml
+%p= table.concat({ |
+  'a', |
+  'b', |
+}, '-') |
+```
 
-Works the same as plain, but HTML-escapes the text
-before placing it in the document.
+编译为：
 
-### `:javascript` {#javascript-filter}
+```html
+<p>a-b</p>
+```
 
-Surrounds the filtered text with `<script>` and (optionally) CDATA tags.
-Useful for including inline Javascript. Use the {Haml::Options#cdata `:cdata`
-option} to control when CDATA tags are added.
+```haml
+%p a |
+  b |
+```
 
-### `:less` {#less-filter}
+编译为：
 
-Parses the filtered text with [Less](http://lesscss.org/) to produce CSS output in `<style>` tag.
-This filter is implemented using Tilt.
+```html
+<p>a b</p>
+```
 
-### `:markdown` {#markdown-filter}
+> ✅ **行中 `|` 不再丢内容**：`%p a | b` 输出 `<p>a | b</p>`。
+> 只有「行尾 `|`」才被当作续行标记。
 
-Parses the filtered text with
-[Markdown](http://daringfireball.net/projects/markdown). This filter is
-implemented using Tilt.
+> ⚠️ 若首行以 `|` 结尾但续行**忘了**写 `|`，整个多行规则会回退，
+> 续行内容会丢失且不报错。请确保每行都带 `|`。
 
-### `:maruku` {#maruku-filter}
+---
 
-Parses the filtered text with [Maruku](https://github.com/nex3/maruku), which
-has some non-standard extensions to Markdown.
+## 空白保留
 
-As of Haml 4.0, this filter is defined in [Haml
-contrib](https://github.com/haml/haml-contrib) but is loaded automatically for
-historical reasons. In future versions of Haml it will likely not be loaded by
-default. This filter is implemented using Tilt.
+有时不希望 Haml 缩进文本。`pre` 和 `textarea` 是空白敏感的。
 
-### `:plain` {#plain-filter}
+Haml 的处理方式是「保留」换行——在放入文档前将其转换为
+HTML 空白转义码 `&#x000A;`。
 
-Does not parse the filtered text. This is useful for large blocks of text
-without HTML tags, when you don't want lines starting with `.` or `-` to be
-parsed.
+> ⚠️ **实测限制**：该转换**仅对 `preserve` 选项中的标签生效**
+> （默认 `pre`、`textarea`）。
 
-### `:preserve` {#preserve-filter}
+```lua
+-- 在 pre 内：换行被转换
+haml.render("~ '<pre>a\\nb</pre>'")
+-- => "<pre>a&#x000A;b</pre>"
 
-Inserts the filtered text into the template with whitespace preserved.
-`preserve`d blocks of text aren't indented, and newlines are replaced with the
-HTML escape code for newlines, to preserve nice-looking output. See also
-[Whitespace Preservation](#whitespace_preservation).
+-- 在 pre 外：不做转换
+haml.render("~ 'a\\nb'")
+-- => "a\nb"
+```
 
-### `:ruby` {#ruby-filter}
+字面 `pre` / `textarea` 内的换行**不会**自动转换（实测）：
 
-Parses the filtered text with the normal Ruby interpreter. Creates an `IO`
-object named `haml_io`, anything written to it is output into the Haml document.
-Not available if the {Haml::Options#suppress_eval `:suppress_eval`} option is
-set to true. The Ruby code is evaluated in the same context as the Haml
-template.
+```lua
+haml.render("%textarea\n  = 'a\\nb'", { format = "html5" })
+-- => "<textarea>a\nb</textarea>"     ← 未转换
+```
 
-### `:sass` {#sass-filter}
+字面文本块可用 `:preserve` 过滤器保留（实测有效）：
 
-Parses the filtered text with [Sass](http://sass-lang.com/) to produce CSS
-output in `<style>` tag. This filter is implemented using Tilt.
+```haml
+%textarea
+  :preserve
+    line 1
+    line 2
+```
 
-### `:scss` {#scss-filter}
+> ⚠️ **与 Ruby Haml 的差异**：Ruby 版提供 `find_and_preserve` helper，
+> **Lua Haml 无此函数**。请用 `~`（配合 `pre`/`textarea`）或 `:preserve` 过滤器。
 
-Parses the filtered text with Sass like the `:sass` filter, but uses the newer
-SCSS syntax to produce CSS output in `<style>` tag. This filter is implemented
-using Tilt.
+---
 
-### `:textile` {#textile-filter}
+## 已知缺陷与限制
 
-Parses the filtered text with [Textile](http://www.textism.com/tools/textile).
-Only works if [RedCloth](http://redcloth.org) is installed.
+本节汇总**实测确认**的问题。使用前请务必了解。
 
-As of Haml 4.0, this filter is defined in [Haml
-contrib](https://github.com/haml/haml-contrib) but is loaded automatically for
-historical reasons. In future versions of Haml it will likely not be loaded by
-default. This filter is implemented using Tilt.
+> v0.4.1 已修复：行内 `=` 求值、行内 `&=`/`!=`、`false`/`nil` 属性省略、`true` 布尔属性、
+> 多行 `|` 续行、`<` 嵌套崩溃、属性输出顺序不稳定，以及 `%p= x` + `escape_html` 的崩溃。
 
-### Custom Filters
+### 影响正确性的缺陷
 
-You can also define your own filters. See {Haml::Filters} for details.
+| # | 问题 | 影响 | 规避方式 |
+|---|---|---|---|
+| 1 | `%tag= expr` 依赖 `-` 局部变量时仍输出占位符 | 单靠 `haml.render` 拿不到结果 | 走完整管道 / 用 CLI |
+| 2 | `- code` 仍以 `<% %>` 占位符输出 | 单靠 `haml.render` 时输出含标记 | 走完整管道 / 用 CLI |
+| 3 | `id` 简写 + class 简写 + Hash id 组合畸形 | 输出 `id="'Article' 'x'"` | Hash 中一次写全 |
+| 4 | 嵌套 `data`/`aria` 表解析报错 | 无法生成 `data-*` 系列 | 手写完整属性名 |
+| 5 | `#{}` 不支持点号路径与表达式 | `#{g.en}` 输出字面量 | 扁平化 `locals` 键名 |
+| 6 | 属性值不转义 | XSS 风险 | 手动转义 |
+| 7 | 多行属性值不支持 `..` 拼接 | 解析报错 | 先在 Lua 侧算好 |
+| 8 | `%a(flag)` 原子属性在 xhtml 下也输出裸 `flag` | 不严格符合 XHTML | 改写为 `%a(flag=true)` |
+| 9 | 多行 `\|` 漏写结尾 `\|` 时续行静默丢失 | 内容丢失且无报错 | 确保每行都带 `\|` |
 
-## Helper Methods {#helper-methods}
+### 无效选项
 
-Sometimes you need to manipulate whitespace in a more precise fashion than what
-the whitespace removal methods allow. There are a few helper methods that are
-useful when dealing with inline content. All these methods take a Haml block to
-modify.
+| 选项 | 说明 |
+|---|---|
+| `suppress_eval` | 全代码库无引用，设置无效（**不能当安全开关**） |
+| `ugly` | 实测无差异 |
+| `tidy` | 实测无差异（输出均不带缩进） |
+| `attribute_wrapper` | 实测无差异（始终用 `'`） |
 
-### surround {#surround}
+### 与 Ruby Haml 的行为差异汇总
 
-Surrounds a Haml block with text. Expects 1 or 2 string arguments used to
-surround the Haml block. If a second argument is not provided, the first
-argument is used as the second.
+| 项目 | Ruby Haml | Lua Haml（实测） |
+|---|---|---|
+| Hash 属性语法 | `{:k => v}` | `{:k => v}` 或 `{k: v}`（**非** `{k = v}`） |
+| 布尔 `true` | `k='k'`（xhtml） | 一致 |
+| 布尔 `false` | 省略属性 | 一致 |
+| class 顺序 | 标识符→HTML→Hash | 标识符→Hash→HTML |
+| `data` 嵌套展开 | 支持（递归） | ❌ 解析报错 |
+| `!!! RDFa` | XHTML+RDFa | 回退 Transitional |
+| `#{}` 点号路径 | 支持（Ruby 求值） | ❌ 不支持 |
+| 多行 `\|` | 支持 | ✅ 支持（每行需带 `\|`） |
+| `<` 空白移除 | 递归压紧子节点 | 只去包裹换行，同级子节点保留换行 |
+| `find_and_preserve` | 有 | ❌ 无 |
+| 属性方法 / 对象引用 | 有 | ❌ 无 |
+| 自定义过滤器注册 | 有 | ❌ 无 |
 
-    = surround "(", ")" do
-      = link_to "learn more", "#"
+### 调试技巧
 
-### precede {#precede}
+```sh
+# 查看解析后的 AST
+lua luahaml.lua -p -i '%p Hello'
 
-Prepends a Haml block with text. Expects 1 argument.
+# 查看编译后的 AST
+lua luahaml.lua -c -i '%p Hello'
+```
 
-    = precede "*" do
-      %span Required
+```lua
+-- 编程式查看 AST
+haml.print_r(haml.parse("%p Hello"))
+```
 
-### succeed {#succeed}
+---
 
-Appends a Haml block with text. Expects 1 argument.
+## 附录：与 Ruby Haml 文档的对应关系
 
-    Begin by
-    = succeed "," do
-      = link_to "filling out your profile", "#"
-    = succeed "," do
-      = link_to "adding a bio", "#"
-    and
-    = succeed "." do
-      = link_to "inviting friends", "#"
+| 本文档章节 | Ruby Haml 原章节 | 状态 |
+|---|---|---|
+| [纯文本](#纯文本) | Plain Text | ✅ 一致 |
+| [HTML 元素](#html-元素) | HTML Elements | ✅ 一致 |
+| [属性](#属性) | Attributes | ⚠️ 语法为 Ruby 风格；无 `data` 嵌套 |
+| [Class 与 ID](#class-与-id) | Class and ID | ⚠️ 顺序不同；混合场景有缺陷 |
+| [空元素](#空元素) | Empty (void) Tags | ✅ 基本一致 |
+| [空白移除](#空白移除) | Whitespace Removal | ✅ 支持（`<` 只去包裹换行） |
+| — | Object Reference `[]` | ❌ 不支持 |
+| [Doctype](#doctype) | Doctype | ⚠️ 无 RDFa |
+| [注释](#注释) | Comments | ✅ 一致 |
+| [Lua 求值](#lua-求值) | Ruby Evaluation | ⚠️ 语言改为 Lua；两阶段求值 |
+| [过滤器](#过滤器) | Filters | ⚠️ 仅 8 个；无注册机制 |
+| — | Helper Methods | ❌ 不支持 |
+| [多行](#多行) | Multiline | ✅ 支持（每行需带 `\|`） |
+| [空白保留](#空白保留) | Whitespace Preservation | ⚠️ 无 `find_and_preserve` |
+| — | Helpers | ❌ 不支持 |
+| — | Rails XSS Protection | ❌ 不适用 |
+| — | Encodings | ❌ 不支持 |
+| — | Turbo | ❌ 不适用 |
 
-## Multiline: `|` {#multiline}
+---
 
-The pipe character designates a multiline string.
-It's placed at the end of a line (after some whitespace)
-and means that all following lines that end with `|`
-will be evaluated as though they were on the same line.
-**Note that even the last line in the multiline block
-should end with `|`.**
-For example:
+## 许可
 
-    %whoo
-      %hoo= h(                       |
-        "I think this might get " +  |
-        "pretty long so I should " + |
-        "probably make it " +        |
-        "multiline so it doesn't " + |
-        "look awful.")               |
-      %p This is short.
-
-is compiled to:
-
-    <whoo>
-      <hoo>I think this might get pretty long so I should probably make it multiline so it doesn't look awful.</hoo>
-      <p>This is short</p>
-    </whoo>
-
-Using multiline declarations in Haml is intentionally awkward.
-This is designed to discourage people from putting lots and lots of Ruby code
-in their Haml templates.
-If you find yourself using multiline declarations, stop and think:
-could I do this better with a helper?
-
-Note that there are a few cases where it's useful to allow
-something to flow over onto multiple lines in a non-awkward manner.
-One of these is HTML attributes.
-Some elements just have lots of attributes,
-so you can wrap attributes without using `|` (see [Attributes](#attributes)).
-
-In addition, sometimes you need to call Ruby methods or declare data structures
-that just need a lot of template information.
-So data structures and  functions that require lots of arguments
-can be wrapped over multiple lines,
-as long as each line but the last ends in a comma
-(see [Inserting Ruby](#inserting_ruby_)).
-
-## Whitespace Preservation
-
-Sometimes you don't want Haml to indent all your text.
-For example, tags like `pre` and `textarea` are whitespace-sensitive;
-indenting the text makes them render wrong.
-
-Haml deals with this by "preserving" newlines before they're put into the
-document -- converting them to the HTML whitespace escape code, `&#x000A;`. Then
-Haml won't try to re-format the indentation.
-
-Literal `textarea` and `pre` tags automatically preserve content given through
-`=`. Dynamically-generated `textarea`s and `pre`s can't be preserved
-automatically, and so should be passed through
-{Haml::Helpers#find\_and\_preserve} or the [`~` command](#tilde), which has the
-same effect.
-
-Blocks of literal text can be preserved using the [`:preserve` filter](#preserve-filter).
-
-## Helpers
-
-Haml offers a bunch of helpers that are useful for doing stuff like preserving
-whitespace, creating nicely indented output for user-defined helpers, and other
-useful things. The helpers are all documented in the {Haml::Helpers} and
-{Haml::Helpers::ActionViewExtensions} modules.
+MIT License。详见 [README.md](README.md)。
