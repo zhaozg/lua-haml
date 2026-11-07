@@ -105,6 +105,7 @@ local function main()
     'spec/tests.json',
     'spec/tests_ext.json',
     'spec/tests_lhtml.json',
+    'tests_patch.json',
   }
   local all, fail = {}, {}
   for i = 1, #suites do

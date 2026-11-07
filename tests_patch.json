@@ -1,0 +1,110 @@
+{
+  "patch: inline script evaluation" : {
+    "inline script resolves from locals" : {
+      "haml" : "%p= x",
+      "html" : "<p>V</p>",
+      "locals" : { "x" : "V" }
+    },
+    "inline script evaluates an expression" : {
+      "haml" : "%p= 1 + 1",
+      "html" : "<p>2</p>"
+    },
+    "inline script escapes when escape_html is set" : {
+      "haml" : "%p= x",
+      "html" : "<p>&lt;b&gt;</p>",
+      "locals" : { "x" : "<b>" },
+      "config" : { "escape_html" : true }
+    },
+    "inline script does not escape by default" : {
+      "haml" : "%p= x",
+      "html" : "<p><b></p>",
+      "locals" : { "x" : "<b>" }
+    },
+    "inline escaped script" : {
+      "haml" : "%p&= x",
+      "html" : "<p>&lt;b&gt;</p>",
+      "locals" : { "x" : "<b>" }
+    },
+    "inline unescaped script ignores escape_html" : {
+      "haml" : "%p!= x",
+      "html" : "<p><b></p>",
+      "locals" : { "x" : "<b>" },
+      "config" : { "escape_html" : true }
+    }
+  },
+  "patch: boolean attributes" : {
+    "false omits the attribute" : {
+      "haml" : "%input{:checked => false}",
+      "html" : "<input />"
+    },
+    "nil omits the attribute" : {
+      "haml" : "%input{:checked => nil}",
+      "html" : "<input />"
+    },
+    "true renders attr=attr in xhtml" : {
+      "haml" : "%input{:selected => true}",
+      "html" : "<input selected='selected' />"
+    },
+    "true renders a bare attr in html5" : {
+      "haml" : "%input{:selected => true}",
+      "html" : "<input selected>",
+      "config" : { "format" : "html5" }
+    },
+    "quoted 'false' stays a literal value" : {
+      "haml" : "%input{:checked => 'false'}",
+      "html" : "<input checked='false' />"
+    },
+    "html-style bare boolean still works" : {
+      "haml" : "%input(checked)",
+      "html" : "<input checked />"
+    },
+    "atomic attribute is unchanged" : {
+      "haml" : "%a(flag)",
+      "html" : "<a flag></a>"
+    }
+  },
+  "patch: multiline with pipe" : {
+    "multiline script" : {
+      "haml" : "= 1 + |\n  2 |",
+      "html" : "3"
+    },
+    "multiline inline script" : {
+      "haml" : "%p= 1 + |\n  2 |",
+      "html" : "<p>3</p>"
+    },
+    "multiline plain text" : {
+      "haml" : "%p a |\n  b |",
+      "html" : "<p>a b</p>"
+    },
+    "multiline with string fragments" : {
+      "haml" : "%p= table.concat({ |\n  'a', |\n  'b', |\n}, '-') |",
+      "html" : "<p>a-b</p>"
+    },
+    "mid-line pipe is literal text" : {
+      "haml" : "%p a | b",
+      "html" : "<p>a | b</p>"
+    }
+  },
+  "patch: inner whitespace modifier" : {
+    "inner whitespace with text children" : {
+      "haml" : "%p<\n  hello\n  world",
+      "html" : "<p>hello\nworld</p>"
+    },
+    "inner whitespace with a nested tag" : {
+      "haml" : "%div<\n  %p a",
+      "html" : "<div><p>a</p></div>"
+    },
+    "inner whitespace with a deep subtree" : {
+      "haml" : "%blockquote<\n  %div\n    Foo!",
+      "html" : "<blockquote><div>Foo!</div></blockquote>"
+    },
+    "inner whitespace on a void element" : {
+      "haml" : "%img<",
+      "html" : "<img />"
+    },
+    "outer whitespace is unchanged" : {
+      "haml" : "%li hello\n%li> world\n%li again",
+      "html" : "<li>hello</li><li>world</li><li>again</li>"
+    }
+  }
+}
