@@ -42,6 +42,7 @@ Lua 5.1 兼容的具体禁令：不用 `goto`、不用 `//`、不用位运算符
 | `lhtml.lua` | `<% %>` 占位符 → Lua 源码 | 改**两阶段管道**的中间格式 |
 | `luahaml.lua` | CLI | 改命令行行为 |
 | `test.lua` | 测试驱动（读 JSON 套件） | 加测试套件、改断言语义 |
+| `test_lhtml.lua` | **`lhtml.lua` 的单元测试**（33 条断言，失败退出码 1） | 改 `lhtml.lua` 时必跑 |
 | `tests_patch.json` | **本项目自己的回归用例**（4 组 23 例） | 加用例默认放这里 |
 | `spec/*.json` | 上游 `haml-spec` 套件（子模块，共 104 例） | 只读，不改 |
 | `sample.haml` | 覆盖大部分语法的示例模板 | 端到端验证 |
@@ -95,7 +96,8 @@ Haml 源码
 环境已具备：`luajit`（LuaJIT）+ `lpeg` 1.1.0。**`lua`/`lua5.x` 未安装**，一律用 `luajit`。
 
 ```bash
-luajit test.lua                          # 全部套件，通过时输出 "Test all passed"
+luajit test.lua                          # 全部 JSON 套件，通过时输出 "Test all passed"
+luajit test_lhtml.lua                    # lhtml 单元测试，通过时输出 "Test all passed (33 assertions)"
 luajit test.lua | grep -c '^Ok'          # 统计通过数（当前 127）
 luajit luahaml.lua sample.haml           # 端到端渲染
 echo '%p hi' | luajit luahaml.lua -s     # 从 stdin 渲染
@@ -250,6 +252,7 @@ git stash pop
 ## 11. 交付前自检清单
 
 - [ ] `luajit test.lua` 输出 `Test all passed`（连跑 2 次，排除 `pairs` 顺序导致的偶发）
+- [ ] 改动过 `lhtml.lua` → `luajit test_lhtml.lua` 输出 `Test all passed (33 assertions)`
 - [ ] 新增用例在旧代码上会失败（回归有效性已验）
 - [ ] `luajit luahaml.lua sample.haml` 输出无异常、无 `<%= %>` 残留
 - [ ] 行为有变更 → `REFERENCE.md` 对应章节已更新，且示例**实测过**
