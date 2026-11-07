@@ -160,10 +160,11 @@ haml.render("%p= title")          -- title 未定义
 
 **求值规则**（`render.lua` 的 `try_code`）：
 
-- `options.lhaml` 为 `true` → 一律输出 `<%= %>` 占位符（供两阶段管道使用）
+- `options.lhaml` 为 `true`（`lhtml` 别名）→ `=` 与 `#{}` 都输出
+  `<%= %>` 占位符（供两阶段管道使用）
 - 否则 → 尝试用 `locals` 求值
   - 能 `loadstring` 且执行不报错、结果非 `nil` → 直接内联结果
-  - 否则 → 回退为 `<%= %>` 占位符
+  - 否则 → 回退为 `<%= %>` 占位符（`strict_eval = true` 时改为报错）
 
 **因此**：仅依赖 `locals` 的动态模板可以只用 `haml.render`；
 若模板用 `-` 先定义局部变量、再由后续 `=` 引用（同一 Lua chunk 内生效），
@@ -195,94 +196,147 @@ haml.render(haml_string_or_compiled, options, locals)
 ## 安全性说明
 
 > ⚠️ **本节是使用 Lua Haml 前必须阅读的内容。**
+> 0.4.3 起，**模板文本**与**来自 `locals` 的数据**走不同的通道：模板仍是代码，
+> 数据不再是代码。但模板本身仍必须视为可信输入。
 
 ### 1. 模板即代码：生成并执行 Lua
 
-完整管道（[架构与使用方式](#架构与使用方式)）的最后一环是
-`loadstring(generated_code)()`——即**执行由模板生成的 Lua 代码**。
+完整管道的最后一环是 `loadstring(generated_code)()`——执行由模板生成的 Lua 代码。
+此外，以下路径在编译期直接求值：
 
-此外，`haml/compile.lua` 在以下路径会**直接 `loadstring` 求值**：
-
-- `code_for`（`compile.lua:186`）— 处理 `&=`、`!=`、`~` 等运算符
-- `handle_node`（`compile.lua:208`）— `escape_html = true` 时的 `=` 求值
+- `code_for`（`haml/compile.lua`）— `!=`、`&=`、`~`
+- `compile` 对独立成行的 `=` **不再求值**；`=` 统一由 `render` 处理（0.4.3 起）
 
 **结论：Haml 模板必须视为可信代码，绝不能接受用户上传或用户可控的内容。**
-模板注入等同于**远程代码执行（RCE）**。
+模板注入等同于远程代码执行（RCE）。编译期求值现在有 `pcall` 和可读错误，
+但不会因此变成沙箱。
+
+### 2. 数据不是代码：`locals` 值会被中和
+
+从 `locals` 进入输出的值（`=`、`#{}`、属性值）会做三件事：
+
+1. 把 `<%` 编码成 `&lt;%`，防止 `lhtml` 阶段把它当作占位符；
+2. 把 `#{` 与反斜杠暂存到哨兵后面，等 `render` 的插值/反转义跑完再原样还原；
+3. 需要时（`escape_html = true`）先做 HTML 转义。
+
+因此下面这条**不会再执行命令**：
 
 ```lua
--- 危险：模板内容来自用户输入
-local html = haml.render(user_supplied_template, { lhaml = true })
--- 后续 lhtml + loadstring 会执行其中任意 Lua
+local evil = "<%= os.execute('touch /tmp/pwn') %>"
+haml.render("%p= x", {}, { x = evil })
+-- => "<p>&lt;%= os.execute('touch /tmp/pwn') %&gt;</p>"
 ```
 
-### 2. `suppress_eval` 不可用于沙箱
+注意边界：
 
-`haml/init.lua` 声明了 `suppress_eval = false`，但**全代码库无任何引用**（实测验证）：
+- 只对**数据**生效。模板正文里字面写 `<%= ... %>` 仍是代码。
+- 默认 `escape_html = false`，所以数据里的 `<script>` 仍会原样输出（XSS），
+  见第 4 条。
+- `compile` 的 `!=` / `&=` / `~` 仍执行模板代码，见第 1 条。
+
+### 3. 两阶段模式：`lhaml`（别名 `lhtml`）
+
+`options.lhaml = true`（`lhtml` 是同一开关的别名）时：
+
+- `=` 与 `#{}` 输出 `<%= expr %>` 占位符，**不会**把 `locals` 的值拼进 Lua 源码；
+- 第二阶段的执行环境由调用方决定；`locals` 不会自动可见。
 
 ```lua
-haml.render("= 1+1", { suppress_eval = true })
--- => "2"    ← 仍然求值，选项无效
+haml.render("%p #{x}", { lhaml = true }, { x = "os.execute(...)" })
+-- => "<p><%=x%></p>"      -- 占位符里是模板里的键名，不是 x 的值
 ```
 
-**不要把它当作安全开关。**
+两阶段模式必须由调用方提供受限的执行环境；CLI 不做沙箱。
 
-### 3. `setfenv` 不是沙箱
+### 4. `escape_html` 覆盖什么、不覆盖什么
 
-`haml/render.lua` 中 `setfenv(f, locals)` 仅改变全局环境查找。
-若 `locals` 表未严格限制，仍可能通过 `getmetatable`、`string.rep`、
-`loadstring` 等路径逃逸。
+默认 `false`。为 `true` 时，**0.4.3 起**覆盖：
+
+- `=`（包括独立成行的 `=`，并使用 `locals`）
+- `#{}` 插值
+- 属性值中由 `locals` 替换出来的部分
+
+不覆盖：
+
+- `:plain` / `:lua` / `:preserve` / `:markdown` 等过滤器的内容
+- `!=`
+- 模板侧带引号的属性值（`title='#{u}'` 的引号与固定部分是模板代码；
+  其中的 `#{}` 仍受第 2 条约束）
+- `<script>` / `<style>` 上下文——HTML 实体转义不等于 JS/CSS 转义
+
+若模板拼接不可信数据，建议同时开启 `escape_html` 并按输出上下文做二次处理，
+不要把它当成全局开关。
+
+### 5. `strict_eval`：让失败可见
+
+`locals` 无法解析表达式时，默认行为是保留 `<%= %>` 占位符交给第二阶段；
+第二阶段能看到完整 `_G`。这是为了兼容“模板里 `-` 定义变量”的用法，但也意味着
+**收紧 `locals` 反而会把更多表达式推到全权限阶段**。
+
+```lua
+haml.render("%p= os.execute('id')", {}, {})
+-- => "<p><%= os.execute('id') %></p>"   （第二阶段还会执行）
+
+haml.render("%p= os.execute('id')", { strict_eval = true }, {})
+-- => error: haml: embedded code failed: ...
+```
+
+`strict_eval` 只让失败显式化，不是沙箱。
+
+### 6. `setfenv` 不是沙箱
+
+`setfenv(f, locals)` 只改变全局查找。`locals` 未严格限制时，仍可通过
+`getmetatable`、`string.rep`、`loadstring` 等路径逃逸。
 
 若确实需要沙箱，应：
 
 1. 在 `locals` 中**显式白名单**允许的函数与变量；
 2. 移除或屏蔽 `loadstring` / `load` / `dofile` / `require` / `os` / `io`；
-3. 考虑在独立进程或受限解释器中渲染。
+3. 考虑在独立进程或受限解释器中渲染；
+4. 开启 `strict_eval`，避免失败后退回全权限阶段。
 
-### 4. `escape_html` 默认关闭
+CLI（`luahaml.lua`）**不是沙箱**：模板代码与生成代码都在宿主进程里执行。
 
-默认 `escape_html = false`（`haml/init.lua`），`=` 输出**不转义**：
+### 7. 深度限制
 
-```lua
-haml.render("= '<b>x</b>'")                          -- => "<b>x</b>"
-haml.render("= '<b>x</b>'", { escape_html = true })  -- => "&lt;b&gt;x&lt;/b&gt;"
-```
+`compile` 与 `render` 拒绝超过 **200 层**的嵌套，抛
+`haml: template nested too deeply`，而不是让 Lua 栈溢出。
+`parse` 基于 LPeg，不递归，不受此限制（实测 20000 层可解析）。
 
-若模板中拼接了不可信数据，必须显式开启 `escape_html`，或改用 `&=`。
+### 8. `#{}` 插值不是表达式求值
 
-### 5. `#{}` 插值不是表达式求值
-
-`haml/render.lua` 的实现是 `locals[match]` **直接查表**，不做任何求值
-（实测验证）：
+`#{g}` 是 `locals` 的**单层键名查表**，不做求值（两阶段模式除外，见第 3 条）：
 
 | 写法 | `locals` | 输出 | 说明 |
 |---|---|---|---|
 | `#{g}` | `{g="HI"}` | `HI` | ✅ 单键名有效 |
-| `#{g.en}` | `{g={en="HI"}}` | `g.en` | ❌ **点号路径不支持** |
+| `#{g.en}` | `{g={en="HI"}}` | `g.en` | ❌ 点号路径不支持 |
 | `#{1+1}` | `{}` | `1+1` | ❌ 不求值 |
 | `\#{g}` | `{g="HI"}` | `#{g}` | ✅ 反斜杠转义 |
 
-因此：
+未命中时回退为原文键名，可能泄露变量名。
 
-- `#{}` 内只能是 `locals` 的**单层键名**，不能是表达式，也不能是点号路径
-- 未命中时回退为原文匹配文本，**可能泄露变量名**
-- 这降低了注入面，但也意味着**不能依赖它做逻辑运算**
+### 9. 过滤器输出不转义
 
-### 6. 过滤器输出不转义
+`:plain`、`:lua`、`:preserve`、`:markdown` 的输出不经过 HTML 转义；
+这些内容里的 `#{}` 仍会被插值（按第 2 条中和数据），但模板正文中的
+`<% ... %>` 会被第二阶段执行。`:markdown` 若接受原始 HTML，还会直接注入。
 
-`:plain`、`:lua`、`:preserve`、`:markdown` 的输出**不经过 HTML 转义**。
+### 10. 属性值
 
-`:markdown` 尤其危险——若 Markdown 源含原始 HTML，会直接注入到输出中。
+- 默认（`escape_html = false`）**不转义**数据，只做第 2 条的中和；
+- 开启 `escape_html` 后，由 `locals` 替换出的属性值会转义；
+- 带引号的模板侧属性值（`title='<b>'`）按模板代码原样输出。
 
-### 7. 属性值不自动转义
+属性值与文本共用同一套求值逻辑（0.4.3 起内联属性也解析 `locals`）。
 
-属性值直接拼接，**不经过 `html_escapes` 处理**（实测验证）：
+### 11. `lhtml` 本身的边界
 
-```lua
-haml.render("%div{:title => '<b>'}")
--- => "<div title='<b>'></div>"    ← 未转义
-```
-
-若属性值来自不可信来源，需自行转义。
+- 文本片段的长括号级数按内容自适应，`!` / `@` 的 `include()` / `at()`
+  参数同样处理；正文里出现 `]===]` 之类的序列不会再越界成代码。
+- 不成对的 `<%` 现在按**文本**输出，不再静默截断后续页面。
+- 直接调用 `lhtml` 时，输入里的 `<% ... %>` 仍会被当作代码；不要把未经中和的
+  不可信文本直接喂给 `lhtml`。本库的 `render` 已经在数据侧做了这件事。
 
 ---
 
@@ -296,7 +350,7 @@ haml.render("%div{:title => '<b>'}")
 | 选项 | 默认值 | 说明 |
 |---|---|---|
 | `format` | `"xhtml"` | 输出格式：`"xhtml"` / `"html4"` / `"html5"` |
-| `escape_html` | `false` | 为 `true` 时 `=` 输出 HTML 转义 |
+| `escape_html` | `false` | 为 `true` 时 `=`、`#{}` 与 `locals` 替换出的属性值做 HTML 转义 |
 | `auto_close` | `true` | 空元素自动闭合（**注意：不是 `autoclose`**） |
 | `indent` | `"  "` | 缩进字符串（两个空格） |
 | `newline` | `"\n"` | 换行符 |
@@ -304,7 +358,8 @@ haml.render("%div{:title => '<b>'}")
 | `closed` | 10 个空元素表 | 视为空元素的标签集合，可自定义 |
 | `html_escapes` | 5 项映射 | HTML 转义表 |
 | `encoding` | `"utf-8"` | **仅写入 XML prolog，不做任何转码** |
-| `lhaml` | `nil` | 为 `true` 时输出 lhtml 占位符而非直接求值 |
+| `lhaml` | `nil` | 为 `true` 时输出 lhtml 占位符而非直接求值；`lhtml` 是同一开关的别名 |
+| `strict_eval` | `false` | 为 `true` 时无法求值的表达式直接报错，不保留占位符 |
 | `markdown` | `nil` | 注入 `:markdown` 过滤器使用的函数 |
 
 ### ⚠️ 声明但**无效**的选项
@@ -466,7 +521,9 @@ MyPage
 
 属性有两种语法：**Hash 风格 `{}`** 和 **HTML 风格 `()`**。
 
-> ⚠️ 属性值**不自动 HTML 转义**，详见 [安全性说明](#安全性说明)。
+> ⚠️ 属性值默认**不自动 HTML 转义**；开启 `escape_html` 后，
+> 由 `locals` 替换出的值会转义，模板侧带引号的字面值仍按模板代码输出。
+> 详见 [安全性说明](#安全性说明)。
 
 ### Hash 风格：`{}`
 
@@ -982,14 +1039,17 @@ You are not using IE.
 >
 > ⚠️ 求值时机取决于选项：
 >
-> - `options.lhaml = true` → **不求值**，一律输出 `<%= %>` 占位符（两阶段管道）
+> - `options.lhaml = true`（`lhtml` 别名同理）→ `=` 与 `#{}` 都输出
+>   `<%= %>` 占位符（两阶段管道）
 > - 默认 → **尝试立即求值**；依赖 `locals` 无法解析时回退为占位符
 >
-> 独立成行的 `&=` / `!=` / `~` 在 `compile.lua` 中总是**立即 `loadstring` 求值**。
+> 独立成行的 `&=` / `!=` / `~` 在 `compile.lua` 中总是**立即 `loadstring` 求值**
+> （有 `pcall` 与可读错误，但不会变成沙箱）。
+> 独立成行的 `=` 自 0.4.3 起由 `render` 使用 `locals` 求值。
 
 ### 插入 Lua：`=`
 
-独立成行的 `=` 立即求值：
+独立成行的 `=` 在 `render` 阶段求值（使用 `locals`，遵循 `escape_html`）：
 
 ```haml
 = 1 + 1
@@ -1011,11 +1071,18 @@ haml.render("%p= 1 + 1")
 -- => "<p>2</p>"
 ```
 
-`locals` 无法解析（如变量未定义）时，回退为占位符，交给 `lhtml` 阶段：
+`locals` 无法解析（如变量未定义）时，默认回退为占位符，交给 `lhtml` 阶段：
 
 ```lua
 haml.render("%p= title")            -- title 未定义
 -- => "<p><%= title %></p>"
+```
+
+若设置 `strict_eval = true`，这种情况会直接报错，不再把表达式推给第二阶段：
+
+```lua
+haml.render("%p= title", { strict_eval = true })
+-- => error: haml: embedded code failed: ...
 ```
 
 这正是 CLI / 两阶段管道的需要：模板里 `-` 定义的局部变量只能在同一 Lua chunk 内可见。
@@ -1031,7 +1098,8 @@ haml.render("%p= title")            -- title 未定义
 <h1>Hi</h1>
 ```
 
-若 `escape_html` 选项为 `true`，`=` 会转义 HTML 敏感字符（实测验证）：
+若 `escape_html` 选项为 `true`，`=`、`#{}` 与 `locals` 替换出的属性值
+都会转义 HTML 敏感字符（0.4.3 起；实测验证）：
 
 ```lua
 haml.render("= '<b>x</b>'")                          -- => "<b>x</b>"
@@ -1461,6 +1529,10 @@ haml.render("%textarea\n  = 'a\\nb'", { format = "html5" })
 
 > v0.4.1 已修复：行内 `=` 求值、行内 `&=`/`!=`、`false`/`nil` 属性省略、`true` 布尔属性、
 > 多行 `|` 续行、`<` 嵌套崩溃、属性输出顺序不稳定，以及 `%p= x` + `escape_html` 的崩溃。
+>
+> v0.4.3 已修复：数据中的 `<%` / `#{}` 越界、`#{}` 与属性不转义、`lhtml` 长括号越界、
+> 不成对 `<%` 静默截断、两阶段模式把值拼成代码、编译期求值独立 `=`、解析错误被吞、
+> 深嵌套栈溢出，以及内联属性不解析 `locals` 的不一致。
 
 ### 影响正确性的缺陷
 
@@ -1468,10 +1540,10 @@ haml.render("%textarea\n  = 'a\\nb'", { format = "html5" })
 |---|---|---|---|
 | 1 | `%tag= expr` 依赖 `-` 局部变量时仍输出占位符 | 单靠 `haml.render` 拿不到结果 | 走完整管道 / 用 CLI |
 | 2 | `- code` 仍以 `<% %>` 占位符输出 | 单靠 `haml.render` 时输出含标记 | 走完整管道 / 用 CLI |
-| 3 | `id` 简写 + class 简写 + Hash id 组合畸形 | 输出 `id="'Article' 'x'"` | Hash 中一次写全 |
-| 4 | 嵌套 `data`/`aria` 表解析报错 | 无法生成 `data-*` 系列 | 手写完整属性名 |
-| 5 | `#{}` 不支持点号路径与表达式 | `#{g.en}` 输出字面量 | 扁平化 `locals` 键名 |
-| 6 | 属性值不转义 | XSS 风险 | 手动转义 |
+| 3 | 嵌套 `data`/`aria` 表解析报错 | 无法生成 `data-*` 系列 | 手写完整属性名 |
+| 4 | `#{}` 不支持点号路径与表达式 | `#{g.en}` 输出字面量 | 扁平化 `locals` 键名 |
+| 5 | 属性值默认不转义 | XSS 风险（`escape_html` 可覆盖 `locals` 值） | 开启 `escape_html` 或手动转义 |
+| 6 | `<script>` / `<style>` 内的 `#{}` 不做 JS/CSS 转义 | 数据可闭合字符串注入 JS | 不要把不可信数据插进脚本；按上下文转义 |
 | 7 | 多行属性值不支持 `..` 拼接 | 解析报错 | 先在 Lua 侧算好 |
 | 8 | `%a(flag)` 原子属性在 xhtml 下也输出裸 `flag` | 不严格符合 XHTML | 改写为 `%a(flag=true)` |
 | 9 | 多行 `\|` 漏写结尾 `\|` 时续行静默丢失 | 内容丢失且无报错 | 确保每行都带 `\|` |

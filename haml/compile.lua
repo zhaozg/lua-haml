@@ -8,11 +8,27 @@ local tostring = tostring
 local unpack = unpack or table.unpack
 local insert = table.insert
 local concat = table.concat
-local sort = table.sort
 local format = string.format
 local gsub = string.gsub
 
 local filter = require "haml/filter"
+
+local MAX_DEPTH = 200
+
+--- Evaluate an embedded Lua expression once, with a readable error instead of
+--- a bare loadstring/runtime failure (compile() is allowed to execute code,
+--- but it must say what went wrong).
+local function eval_code (code)
+  local f, err = loadstring('return ' .. code)
+  if not f then
+    error("haml: invalid embedded code: " .. tostring(err), 0)
+  end
+  local ok, v = pcall(f)
+  if not ok then
+    error("haml: embedded code failed: " .. tostring(v), 0)
+  end
+  return tostring(v)
+end
 
 --- Merge two or more tables together.
 -- Duplicate keys cause the value to be added as a table containing all the
@@ -134,7 +150,6 @@ end
 --- tag
 -- Precompile an (X)HTML tag for the current precompiler state.
 local function tag_for (node, options, parent)
-  local ctx
   if node.outer_whitespace_modifier then
     if parent then
       parent.inner_whitespace_modifier = node.outer_whitespace_modifier
@@ -142,23 +157,19 @@ local function tag_for (node, options, parent)
     node.outer_whitespace_modifier = nil
   end
 
-  if node.inline_content then
-    ctx = node.inline_content
+  -- A tag with inline text and no attributes cannot involve locals or
+  -- escaping, so keep the old cheap leaf (render would only rebuild the same
+  -- string).  When attributes are present they must stay on the node so that
+  -- render() can resolve locals and apply escaping.
+  local ctx = node.inline_content
+  local attrs = node.attributes
+  local css = node.css
+  if ctx and (not attrs or #attrs == 0) and (not css or not next(css)) then
+    return format('<%s>%s</%s>', node.tag, ctx, node.tag)
   end
 
-  if ctx then
-    local T = join_tables({}, node.css, unpack(node.attributes or {}))
-    local a = {}
-    for k, v in pairs(T) do
-      a[#a + 1] = type(v) == 'string' and format('%s=%s', k, v) or format('%s="%s"', k, concat(v, ' '))
-    end
-    sort(a)
-    node = #a > 0 and format('<%s %s>%s</%s>', node.tag, concat(a, ' '), ctx, node.tag) or format('<%s>%s</%s>', node.tag, ctx, node.tag)
-  else
-    node = join_tables(node, node.css, unpack(node.attributes or {}))
-    node.css, node.attributes = nil, nil
-  end
-
+  node = join_tables(node, node.css, unpack(node.attributes or {}))
+  node.css, node.attributes = nil, nil
   return node
 end
 
@@ -183,7 +194,7 @@ local function code_for (node, options)
     node.operator = nil
     node.tag = '='
   else
-    local code = tostring(loadstring('return ' .. node.code)())
+    local code = eval_code(node.code)
     if node.operator ~= "unescaped_script" and (node.operator == "escaped_script" or options.escape_html) then
       return filter.escape_html(code, options.html_escapes)
     elseif node.operator == "preserved_script" then
@@ -204,12 +215,8 @@ local function handle_node (node, options, locals, parent)
   elseif operator == "markup_comment" or operator == "conditional_comment" then
     node = comment_for(node, options)
   elseif operator == "script" then
-    if options.escape_html and node.code then
-      node[1] = filter.escape_html(loadstring('return ' .. node.code)(), options.html_escapes)
-      node.code = nil
-      node.script = nil
-      node.operator = nil
-    end
+    -- `=` is evaluated by render(), where locals and escape_html are known.
+    -- Evaluating it here used to ignore locals and read _G instead.
   end
   if node then
     if node.tag then
@@ -267,7 +274,11 @@ end
 
 --- Precompile Haml into Lua code.
 -- @param nodes A table of parsed nodes produced by the parser.
-local function compile (nodes, options, locals, parent)
+local function compile (nodes, options, locals, parent, depth)
+  depth = depth or 1
+  if depth > MAX_DEPTH then
+    error(format('haml: template nested too deeply (limit %d)', MAX_DEPTH), 0)
+  end
   procompile(nodes)
   local index = 1
   repeat
@@ -280,7 +291,7 @@ local function compile (nodes, options, locals, parent)
         if #node == 0 then
           node = handle_node(node, options, locals, nodes)
         else
-          node = assert(compile(node, options, locals, nodes))
+          node = assert(compile(node, options, locals, nodes, depth + 1))
           node = assert(handle_node(node, options, locals, nodes))
         end
         nodes[index] = assert(node)

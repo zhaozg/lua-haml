@@ -51,4 +51,25 @@ function M.print_r (t, name, options)
     print(pr(t,name, nil, options))
 end
 
+--- Number of '=' characters needed inside a Lua long bracket so that `s`
+--- cannot close it. Returns 0 when `s` contains no `]=*]` sequence.
+-- The scan is byte based on purpose: `string.gmatch` would miss overlapping
+-- sequences such as `]]=]`, which still contains `]=]`.
+function M.long_bracket_level (s)
+    local best, found = 0, false
+    for p = 1, #s do
+        if byte(s, p) == 93 then -- ']'
+            local q = p + 1
+            while byte(s, q) == 61 do q = q + 1 end -- '='
+            if byte(s, q) == 93 then
+                found = true
+                local n = q - p - 1
+                if n > best then best = n end
+            end
+        end
+    end
+    if not found then return 0 end
+    return best + 1
+end
+
 return M

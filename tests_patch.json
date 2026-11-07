@@ -106,5 +106,60 @@
       "haml" : "%li hello\n%li> world\n%li again",
       "html" : "<li>hello</li><li>world</li><li>again</li>"
     }
+  },
+  "patch: security" : {
+    "#{} is escaped when escape_html is set" : {
+      "haml" : "%p #{x}",
+      "html" : "<p>&lt;b&gt;</p>",
+      "locals" : { "x" : "<b>" },
+      "config" : { "escape_html" : true }
+    },
+    "attribute value is escaped when escape_html is set" : {
+      "haml" : "%div(title=u)",
+      "html" : "<div title='a&#039;b'></div>",
+      "locals" : { "u" : "a'b" },
+      "config" : { "escape_html" : true }
+    },
+    "data containing <% is neutralised on the = path" : {
+      "haml" : "%p= x",
+      "html" : "<p>&lt;%= 1+1 %></p>",
+      "locals" : { "x" : "<%= 1+1 %>" }
+    },
+    "data containing <% is neutralised on the #{} path" : {
+      "haml" : "%p #{x}",
+      "html" : "<p>&lt;%= 1+1 %></p>",
+      "locals" : { "x" : "<%= 1+1 %>" }
+    },
+    "data containing <% is neutralised in an attribute" : {
+      "haml" : "%div(title=u)",
+      "html" : "<div title='&lt;%= 1+1 %>'></div>",
+      "locals" : { "u" : "<%= 1+1 %>" }
+    },
+    "data containing #{} is not interpolated again" : {
+      "haml" : "%p= x",
+      "html" : "<p>#{secret}</p>",
+      "locals" : { "x" : "#{secret}", "secret" : "SECRET" }
+    },
+    "inline attribute uses locals" : {
+      "haml" : "%div(title=u) hi",
+      "html" : "<div title='V'>hi</div>",
+      "locals" : { "u" : "V" }
+    },
+    "standalone = with a number and escape_html" : {
+      "haml" : "= 1+1",
+      "html" : "2",
+      "config" : { "escape_html" : true }
+    },
+    "standalone = uses locals and escapes" : {
+      "haml" : "= x",
+      "html" : "&lt;b&gt;",
+      "locals" : { "x" : "<b>" },
+      "config" : { "escape_html" : true }
+    },
+    "data-driven lhtml include is neutralised" : {
+      "haml" : "%p= x",
+      "html" : "<p>&lt;%! /etc/passwd %></p>",
+      "locals" : { "x" : "<%! /etc/passwd %>" }
+    }
   }
 }

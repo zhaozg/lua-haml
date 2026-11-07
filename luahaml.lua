@@ -1,6 +1,20 @@
 #!/usr/bin/env lua
 local haml = require "haml/init"
-local VERSION = "0.2.0"
+local util = require "haml/util"
+local long_bracket_level = util.long_bracket_level
+
+-- The CLI has no sandbox: templates (and any data a caller wires in) run in
+-- the host process.  Read the version from the checkout instead of the stale
+-- literal this file used to carry.
+local function read_version ()
+  local dir = (arg and arg[0] or ''):match('^(.*[/\\])') or ''
+  local fh = io.open(dir .. 'VERSION', 'rb')
+  if not fh then return "0.4.3" end
+  local v = (fh:read('*l') or '0.4.3'):gsub('%s+$', '')
+  fh:close()
+  return v
+end
+local VERSION = read_version()
 
 local banner = "LuaHaml %s, copyright Norman Clarke <norman@njclarke.com> 2009-2012"
 
@@ -63,33 +77,39 @@ local function render(haml_string)
   local output = haml.render(haml_string, haml_options)
   local r, lhtml = pcall(require, 'lhtml')
   if r then
-    local function interpolate_code(str, incode)
-      if incode == false then
-        str = str:gsub('"', '"')
-      end
+    -- Choose the long-bracket level from the text itself.  The old code hard
+    -- coded four '=' here and three in lhtml; any text containing the matching
+    -- terminator escaped the string and became Lua code.
+    local function interpolate_code (str, lvl)
+      local eq = string.rep('=', lvl)
+      local close = ']' .. eq .. ']) io.write('
+      local open = ') io.write([' .. eq .. '['
       return str:gsub('([\\]*)#{(.-)}', function(slashes, match)
         if #slashes == 1 then
           return '#{' .. match .. '}'
-        else
-          if incode then
-            return ']====]) io.write(' .. slashes .. match .. ') io.write([====['
-          else
-            return ']]) io.write(' .. slashes .. match .. ') io.write([['
-          end
         end
+        return close .. slashes .. match .. open
       end)
+    end
+
+    local function wrap_write (code, lvl)
+      local eq = string.rep('=', lvl)
+      return string.format('io.write([%s[%s]%s])', eq, code, eq)
     end
 
     local function _totable(code, ins)
       if code then
         if not ins then
           if #code > 0 then
-            code = string.format('io.write([====[%s]====])', interpolate_code(code, true))
+            local lvl = long_bracket_level(code)
+            if lvl < 4 then lvl = 4 end
+            code = wrap_write(interpolate_code(code, lvl), lvl)
           end
           return code
         elseif ins == '=' then
           if code:find('([\\]*)#{(.-)}') then
-            return string.format('io.write([[%s]])', tostring(interpolate_code(code, false)))
+            local lvl = long_bracket_level(code)
+            return wrap_write(interpolate_code(code, lvl), lvl)
           else
             return string.format('io.write(%s)', code)
           end
@@ -142,16 +162,17 @@ for i, v in ipairs(arg) do
   elseif v == '-v' or v == '--version' then
     show_banner()
     os.exit()
-  elseif v == '--copyright' then
-    show_license()
-    os.exit()
   elseif string.match(v, "^-[a-z0-9%-]") then
     print(string.format('Invalid argument "%s"', v))
     show_usage()
     os.exit()
   end
 end
-local _ENV = {}
-setmetatable(_ENV, { __index = _G })
-setfenv(exec_func, _ENV)
-exec_func(input_func(), {}, _ENV)
+-- Run without pretending to sandbox: the previous `_ENV` table was never
+-- passed to haml.render and the generated chunk was never setfenv'd, so both
+-- stages already had full access to _G.
+local ok, err = pcall(function () return exec_func(input_func()) end)
+if not ok then
+  io.stderr:write(tostring(err), '\n')
+  os.exit(1)
+end

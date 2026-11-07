@@ -1,6 +1,6 @@
 --[[lit-meta
   name = "lua/haml"
-  version = "0.4.2"
+  version = "0.4.3"
   homepage = "https://github.com/zhaozg/lua-haml"
   description = "Haml markup language for Lua"
   tags = { "haml", "html" }
@@ -40,6 +40,10 @@ local _options = {
     textarea = true,
   },
   suppress_eval = false,
+  -- When true, an expression that cannot be evaluated against `locals` is an
+  -- error instead of a placeholder that the second stage would run with full
+  -- access to _G.
+  strict_eval = false,
   -- provided for compatiblity; does nothing
   ugly = false,
   html_escapes = {

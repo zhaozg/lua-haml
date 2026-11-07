@@ -1,3 +1,68 @@
+## 0.4.3
+
+Security release. Every item below was reproduced before the fix; the audit
+notes and the reproducers live in `FIXME.md` and `test_security.lua`.
+
+* **Data is no longer executable template syntax.** A value rendered through
+  `=`, `#{}` or an attribute used to reach the second stage verbatim, so a value
+  containing `<%= os.execute(...) %>` became Lua code (`N1`), and a value
+  containing `#{secret}` was interpolated a second time and could read other
+  locals (`N2`). Values from `locals` now encode `<%` as `&lt;%`, park `#{` and
+  backslashes behind a sentinel until the interpolation passes are done, and are
+  restored verbatim afterwards.
+
+* **Long-bracket levels are adaptive.** `lhtml` used a fixed `[===[` for text
+  and `[[` for `include()` / `at()`; text containing the matching terminator
+  escaped the string and ran as Lua (`S1`). The level is now computed from the
+  content, `!`/`@` included, and `luahaml.lua` does the same for its `io.write`
+  wrappers.
+
+* **`lhtml` no longer truncates on a stray `<%`.** The grammar stopped at the
+  first `<%` it could not parse and silently dropped the rest of the document
+  (`N4`); an unmatched `<%` is text now.
+
+* **`escape_html` covers `#{}` and attribute values.** It only escaped `=`
+  before (`S3`, `S4`). Attribute values substituted from `locals` and `#{}`
+  expansions now go through the same escaper. Quoted template-side attribute
+  values are still left alone (they are template code, not data).
+
+* **`#{}` in two-phase mode no longer splices values as Lua source.** The
+  `lhtml` branch of the interpolation pass used `locals[match]` as the
+  placeholder body, so a value could become code (`N3`). It now emits
+  `<%= match %>`; `lhaml` and `lhtml` are accepted as aliases on every path.
+
+* **`compile` stopped evaluating standalone `=`.** `= x` with
+  `escape_html = true` used to be evaluated in `_G` at compile time, ignoring
+  `locals`, and `= 1+1` crashed in `filter.escape_html` (`S5`). It is evaluated
+  by `render` now, with `locals`, and escaped there. `!=` / `&=` / `~` still
+  evaluate at compile time by design, but with `pcall` and a readable error
+  instead of a bare `loadstring`.
+
+* **`strict_eval`.** New opt-in option: an expression that cannot be evaluated
+  against `locals` raises an error instead of leaving a placeholder for the
+  second stage, which runs with full `_G` (`S2`).
+
+* **Depth limit.** `compile` and `render` refuse templates nested deeper than
+  200 levels instead of overflowing the Lua stack (`S6`).
+
+* **Parser errors are visible.** `haml.parse` used to print a traceback to
+  stdout and return an empty template; it raises now, and the CLI reports the
+  error on stderr with a non-zero exit (`N6`).
+
+* **CLI.** Removed the decorative `_ENV` (it was never passed to
+  `haml.render`, and the generated chunk was never `setfenv`'d), the stale
+  `0.2.0` version literal, and the `--copyright` branch that called an
+  undefined function (`S7`). Errors are reported instead of escaping as a raw
+  traceback.
+
+* **Attributes.** Inline attributes now resolve `locals` like non-inline ones
+  (`S9`), `#{}` values are `tostring`ed instead of raising on tables (`S8`),
+  and `false` omits the attribute while `true` renders it as a boolean.
+
+Tests: 137 JSON cases, 37 `lhtml` assertions, and the new
+`test_security.lua` (12 assertions). The data guard costs roughly 10-15% on a
+render of `sample.haml`; templates with no data substitution are unaffected.
+
 ## 0.4.2
 
 * `haml.render` is now repeatable. `_recurse` used to strip the metadata keys

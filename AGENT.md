@@ -42,7 +42,8 @@ Lua 5.1 兼容的具体禁令：不用 `goto`、不用 `//`、不用位运算符
 | `lhtml.lua` | `<% %>` 占位符 → Lua 源码 | 改**两阶段管道**的中间格式 |
 | `luahaml.lua` | CLI | 改命令行行为 |
 | `test.lua` | 测试驱动（读 JSON 套件） | 加测试套件、改断言语义 |
-| `test_lhtml.lua` | **`lhtml.lua` 的单元测试**（33 条断言，失败退出码 1） | 改 `lhtml.lua` 时必跑 |
+| `test_lhtml.lua` | **`lhtml.lua` 的单元测试**（37 条断言，失败退出码 1） | 改 `lhtml.lua` 时必跑 |
+| `test_security.lua` | 错误路径测试（`strict_eval`、深度上限、解析错误、编译期求值） | 改求值/解析/限制时必跑 |
 | `tests_patch.json` | **本项目自己的回归用例**（4 组 23 例） | 加用例默认放这里 |
 | `spec/*.json` | 上游 `haml-spec` 套件（子模块，共 104 例） | 只读，不改 |
 | `sample.haml` | 覆盖大部分语法的示例模板 | 端到端验证 |
@@ -86,8 +87,9 @@ Haml 源码
 |---|---|
 | `%tag= expr`（可解析） | `haml/render.lua` 的 `try_code`，`pcall` 包裹 |
 | `%tag= expr`（不可解析） | 保留占位符，第二阶段执行 |
-| 独立行 `=` / `-` | 保留占位符，第二阶段执行 |
-| 独立行 `&=` / `!=` / `~` | `haml/compile.lua` **立即** `loadstring`（无 `pcall`） |
+| 独立行 `=` | `haml/render.lua` 用 `locals` 求值（0.4.3 起）；不再在 compile 阶段执行 |
+| 独立行 `-` | 保留占位符，第二阶段执行 |
+| 独立行 `&=` / `!=` / `~` | `haml/compile.lua` **立即** `loadstring`（有 `pcall` + 可读错误） |
 
 ---
 
@@ -97,8 +99,9 @@ Haml 源码
 
 ```bash
 luajit test.lua                          # 全部 JSON 套件，通过时输出 "Test all passed"
-luajit test_lhtml.lua                    # lhtml 单元测试，通过时输出 "Test all passed (33 assertions)"
-luajit test.lua | grep -c '^Ok'          # 统计通过数（当前 127）
+luajit test_lhtml.lua                    # lhtml 单元测试，通过时输出 "Test all passed (37 assertions)"
+luajit test_security.lua                 # 错误路径测试，通过时输出 "Test all passed (12 assertions)"
+luajit test.lua | grep -c '^Ok'          # 统计通过数（当前 137）
 luajit luahaml.lua sample.haml           # 端到端渲染
 echo '%p hi' | luajit luahaml.lua -s     # 从 stdin 渲染
 luajit luahaml.lua -i '%p hi'            # 行内模板
@@ -203,7 +206,7 @@ for _ = 1, n do haml.render(source, options, locals) end
 ### 关键陷阱
 
 1. **`html` 必须是最终 HTML**。`test.lua` 在比对前会自己跑一遍 `lhtml` + `loadstring`（`test.lua:71-73`），所以要写的是求值之后的最终形态。
-2. **属性按字母序输出，用单引号**。`haml/compile.lua:155` 与 `haml/render.lua:175,194` 都会 `sort`，写成 `"<div a='2' z='1'>"`。
+2. **属性按字母序输出，用单引号**。`haml/render.lua` 的属性分支会 `sort`，写成 `"<div a='2' z='1'>"`。
 3. **别依赖 `pairs()` 顺序**。模板里遍历哈希（如 `sample.haml` 的多语言列表）输出顺序不稳定，不同运行可能不同。测试若涉及多键遍历，请改用 `ipairs` 有序数组。
 4. **一个用例产出非法 HTML 会中断整套测试**。`test.lua` 用 `assert(lhtml_compile(html))` 而非 `pcall`，异常会直接抛出、后续套件不再执行。新增用例后若看到 `Test all passed` 缺失，先确认没有崩溃。
 5. **`config.sort = true` 是死标志**。`test.lua:60` 设置它，但代码库中无任何地方读取 `options.sort`——排序是无条件发生的。不要以为能靠它关掉排序。
@@ -235,7 +238,7 @@ git stash pop
 | 改标签/空元素/doctype | `haml/compile.lua`（`tag_for` / `doctype_for` / `should_auto_close`） | `closed` 表在 `haml/init.lua` |
 | 改空白行为 | `haml/render.lua` 的 `inner_ws` / `tight` 递归；`preserve` 逻辑 | 对照 `REFERENCE.md#空白移除` |
 | 加过滤器 | `haml/filter.lua` 的 `_filters` 表 + 写一个 `xxx_filter` | 同步 `REFERENCE.md#过滤器` |
-| 改求值/转义 | `haml/render.lua`（`try_code`、`escape_html`）+ `haml/compile.lua:186,208` | 注意 `lhaml` 模式行为 |
+| 改求值/转义 | `haml/render.lua`（`try_code`、`escape_html`、`data_value` / `protect_data`）+ `haml/compile.lua` 的 `eval_code` | 数据侧与模板侧是两个通道，别看漏；`lhaml`/`lhtml` 是同一开关 |
 | 改中间格式 | `lhtml.lua` | 会牵动 CLI 与全部测试，谨慎 |
 
 ---
@@ -271,9 +274,9 @@ git stash pop
 | # | 现象 | 位置 | 建议 |
 |---|---|---|---|
 | 1 | `spec/tests_ext.json` 是 **GBK** 编码（含中文），按 UTF-8 读会抛 `UnicodeDecodeError` | `spec/tests_ext.json` | 读取时显式 `encoding='gbk'`；该文件在子模块内，不要改 |
-| 2 | CLI 版本号硬编码 `0.2.0`，与模块 `0.4.1` 不一致 | `luahaml.lua:3` | 顺手修时改为读 `VERSION` |
-| 3 | `--copyright` 调用未定义的 `show_license` → 崩溃 | `luahaml.lua:146` | 修则补函数，否则移除该分支 |
-| 4 | `&=` / `!=` / `~` 在 `haml/compile.lua` 中直接 `loadstring` 且无 `pcall`，表达式非法时抛裸错 | `haml/compile.lua:186,208` | 改造需保持错误信息可读 |
+| 2 | ~~CLI 版本号硬编码 `0.2.0`~~ 0.4.3 起从 `VERSION` 读取 | `luahaml.lua` | 已修 |
+| 3 | ~~`--copyright` 调用未定义的 `show_license`~~ 0.4.3 起移除该分支 | `luahaml.lua` | 已修 |
+| 4 | `&=` / `!=` / `~` 在 `haml/compile.lua` 中仍立即 `loadstring`（有 `pcall`）；模板必须可信 | `haml/compile.lua` | 保持错误信息可读 |
 | 5 | `options.sort` 无读取方（死标志） | `test.lua:60` | 不影响功能，勿依赖 |
 | 6 | 多行 `\|` 续行**必须每行都以 `\|` 结尾**，漏写则续行静默丢失 | `haml/parser.lua` `multiline_text` | 文档已标注；若要改为容错需加用例 |
 | 7 | `%a(flag)` 原子属性在 xhtml 下也输出裸 `flag` | `haml/render.lua` 布尔分支 | 既有用例锁定该行为，改动需确认 |
@@ -285,7 +288,8 @@ git stash pop
 ## 11. 交付前自检清单
 
 - [ ] `luajit test.lua` 输出 `Test all passed`（连跑 2 次，排除 `pairs` 顺序导致的偶发）
-- [ ] 改动过 `lhtml.lua` → `luajit test_lhtml.lua` 输出 `Test all passed (33 assertions)`
+- [ ] `luajit test_security.lua` 输出 `Test all passed (12 assertions)`
+- [ ] 改动过 `lhtml.lua` → `luajit test_lhtml.lua` 输出 `Test all passed (37 assertions)`
 - [ ] 新增用例在旧代码上会失败（回归有效性已验）
 - [ ] `luajit luahaml.lua sample.haml` 输出无异常、无 `<%= %>` 残留
 - [ ] 改过渲染/解析热路径 → `luajit bench.lua sample.haml 3000`，`render only (cached)` 无意外劣化

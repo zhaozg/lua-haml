@@ -278,6 +278,29 @@ do
 end
 
 ------------------------------------------------------------------------------
+--- Translation: hostile / malformed input
+------------------------------------------------------------------------------
+
+do
+  local T = 'hardening'
+
+  -- Text is wrapped at whatever level its own content requires, so a payload
+  -- that used to close the long string is now just text.
+  eq(T .. ': text raises the bracket level',
+     translate(']===]'), 'print([====[]===]]====])')
+
+  -- include()/at() arguments get the same treatment (the old code used level 0).
+  eq(T .. ': include raises the bracket level',
+     translate('<%! a ]=] b %>'), 'include([==[ a ]=] b ]==])')
+
+  -- A "<%" without a closing "%>" used to stop the grammar and silently drop
+  -- the rest of the document.  It is text now.
+  eq(T .. ': unmatched <% is text',
+     translate('a <% b'), 'print([===[a ]===])print([===[<% b]===])')
+  eq(T .. ': unmatched <% is preserved when run', render('a <% b'), 'a <% b')
+end
+
+------------------------------------------------------------------------------
 --- Summary
 ------------------------------------------------------------------------------
 

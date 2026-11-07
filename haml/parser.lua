@@ -290,7 +290,10 @@ local function tidy (t)
         --return to parent
         repeat
           ctx = parent[ctx]
-        until #ctx.space == #v.space
+        until not ctx or (ctx.space and #ctx.space == #v.space)
+        if not ctx or not ctx.space then
+          error(string.format('inconsistent indentation at %d', v.pos or 0), 0)
+        end
         ctx = parent[ctx]
         ctx[#ctx + 1] = v
         remove(t, i)
@@ -298,9 +301,7 @@ local function tidy (t)
         parent[v] = ctx
         ctx = v
       else
-        print('#v.space',#v.space)
-        print('#ctx.space',#ctx.space)
-        assert(nil, string.format('Error at %d, %d and %d mismatch',v.pos,#v.space,#ctx.space))
+        error(string.format('indentation mismatch at %d (%d vs %d)', v.pos, #v.space, #ctx.space), 0)
       end
     end
   until i > #t
@@ -309,21 +310,18 @@ local function tidy (t)
 end
 
 local function parser (input)
-  local _, gram = xpcall(function()
+  local ok, gram = pcall(function()
       --syntax = require'pegdebug'.trace(syntax)
-      local _ = match(syntax,input)
-      _ = tidy(_)
-      return _
-    end,
-    function(msg)
-      print(debug.traceback(msg,2)
-    ) end
-  )
-  if _ then
-    return gram
-  else
-    return ''
+      local ast = match(syntax,input)
+      return tidy(ast)
+    end)
+  if not ok then
+    -- Swallowing the error used to return an empty template and print a
+    -- traceback to stdout, so callers could not tell a bad template from an
+    -- empty one.
+    error('haml: parse error: ' .. tostring(gram), 0)
   end
+  return gram
 end
 
 return parser
