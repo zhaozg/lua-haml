@@ -56,6 +56,8 @@ end
 -- The scan is byte based on purpose: `string.gmatch` would miss overlapping
 -- sequences such as `]]=]`, which still contains `]=]`.
 function M.long_bracket_level (s)
+    -- Most text fragments contain no ']' at all; skip the byte scan.
+    if not find(s, ']', 1, true) then return 0 end
     local best, found = 0, false
     for p = 1, #s do
         if byte(s, p) == 93 then -- ']'

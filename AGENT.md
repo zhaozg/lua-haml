@@ -101,7 +101,7 @@ Haml 源码
 luajit test.lua                          # 全部 JSON 套件，通过时输出 "Test all passed"
 luajit test_lhtml.lua                    # lhtml 单元测试，通过时输出 "Test all passed (37 assertions)"
 luajit test_security.lua                 # 错误路径测试，通过时输出 "Test all passed (12 assertions)"
-luajit test.lua | grep -c '^Ok'          # 统计通过数（当前 137）
+luajit test.lua | grep -c '^Ok'          # 统计通过数（当前 141）
 luajit luahaml.lua sample.haml           # 端到端渲染
 echo '%p hi' | luajit luahaml.lua -s     # 从 stdin 渲染
 luajit luahaml.lua -i '%p hi'            # 行内模板
@@ -144,13 +144,16 @@ print(full([[- local t = "Hi"
 ### 性能特征（实测，LuaJIT，`sample.haml` 2892 字节）
 
 ```
-parse + compile + render   ~600 µs
+parse + compile + render   ~510 µs
   ├─ parse                 ~320 µs
-  ├─ compile               ~120 µs
-  └─ render                ~150 µs
+  ├─ compile               ~110 µs
+  └─ render                 ~80 µs
 ```
 
-**parse+compile 是 render 的 2.4 倍；模板越小差距越大**（186 字节模板实测 10.9 倍）。
+**parse+compile 是 render 的 5 倍左右；模板越小差距越大**（186 字节模板实测 10.9 倍）。
+0.4.3 把 `#{}` 的全串 `gsub` 换成了手写扫描，render 从约 170 µs 降到约 80 µs；
+再加 `lhtml` 约 60 µs。数据保护（`protect_data`）只作用于从 `locals` 来的值，
+无插值的模板几乎不付这个成本。
 
 所以：**编译一次，缓存，反复 render**。`haml.render(compiled_table)` 是受支持的，
 而且从 0.4.2 起是幂等的——早期版本 `_recurse` 会就地削掉 AST 的元数据

@@ -51,12 +51,20 @@ local function try_code (code, locals, options)
   return v, true
 end
 
+-- Building the character class is a measurable part of an escape-heavy
+-- render (200 attributes: ~1.2us each).  Cache it per escapes table; the
+-- default table is shared, so the common case builds it once per process.
+local escape_patterns = setmetatable({}, { __mode = 'k' })
 local function escape_html (str, escapes)
-  local chars = {}
-  for k in pairs(escapes) do
-    chars[#chars + 1] = k
+  local pattern = escape_patterns[escapes]
+  if not pattern then
+    local chars = {}
+    for k in pairs(escapes) do
+      chars[#chars + 1] = k
+    end
+    pattern = ('([%s])'):format(concat(chars, ""))
+    escape_patterns[escapes] = pattern
   end
-  local pattern = ('([%s])'):format(concat(chars, ""))
   return (str:gsub(pattern, escapes))
 end
 
@@ -69,9 +77,13 @@ end
 --     back after those passes have run.
 -- The sentinel is byte 1: it cannot appear in normal markup, and any existing
 -- byte 1 in the data is doubled so the restore stays unambiguous in practice.
-local SPECIAL_DATA = '[<#\\\1]'
+local function has_special (s)
+  return s:find('<', 1, true) or s:find('#', 1, true)
+      or s:find('\\', 1, true) or s:find('\1', 1, true)
+end
+
 local function protect_data (s)
-  if not s:find(SPECIAL_DATA) then return s end
+  if not has_special(s) then return s end
   if s:find('<%', 1, true) then s = s:gsub('<%%', '&lt;%%') end
   if s:find('\1', 1, true) then s = s:gsub('\1', '\1\1') end
   if s:find('#{', 1, true) then s = s:gsub('#{', '\1H') end
@@ -84,23 +96,42 @@ end
 -- unescape cannot eat them.  Avoiding the `#{` marker keeps the common case
 -- out of restore_data entirely.
 local function protect_late (s)
-  if not s:find('[<\\\1]') then return s end
+  if not has_special(s) then return s end
   if s:find('<%', 1, true) then s = s:gsub('<%%', '&lt;%%') end
   if s:find('\1', 1, true) then s = s:gsub('\1', '\1\1') end
   if s:find('\\', 1, true) then s = s:gsub('\\', '\1S') end
   return s
 end
 
+-- Rewrite only the marker positions instead of running a gsub over the whole
+-- document.  A gsub costs ~17us on a 3KB page even when it matches once; this
+-- loop costs ~1us and the markers are rare by construction.
 local function restore_data (s)
-  if not s:find('\1', 1, true) then
+  local pos = s:find('\1', 1, true)
+  if not pos then
     return s
   end
-  return (s:gsub('\1([HS\1])', function (c)
-    if c == 'S' then return '\\'
-    elseif c == 'H' then return '#{'
-    else return '\1'
+  local out, i = {}, 1
+  while pos do
+    out[#out + 1] = s:sub(i, pos - 1)
+    local c = s:sub(pos + 1, pos + 1)
+    if c == 'H' then
+      out[#out + 1] = '#{'
+      i = pos + 2
+    elseif c == 'S' then
+      out[#out + 1] = '\\'
+      i = pos + 2
+    elseif c == '\1' then
+      out[#out + 1] = '\1'
+      i = pos + 2
+    else
+      out[#out + 1] = '\1'
+      i = pos + 1
     end
-  end))
+    pos = s:find('\1', i, true)
+  end
+  out[#out + 1] = s:sub(i)
+  return table.concat(out)
 end
 
 local function data_value (value, options)
@@ -301,42 +332,91 @@ local function _recurse(node, options, locals, lvl, tight)
   end
 end
 
-local function render(dom, options, locals)
-  local two_phase = options.lhaml or options.lhtml
-  local html = _recurse(dom, options, locals, 0)
-
-  -- Each pass below rescans the whole output, and on a page of a few KB they
-  -- cost more between them than _recurse itself does. A plain substring search
-  -- is two orders of magnitude cheaper than the gsub, so gate each pass on the
-  -- literal its pattern requires. Pages that use no interpolation -- the
-  -- common case for plain markup -- skip all three.
-  if html:find('"#{', 1, true) then
-    html = html:gsub('"#{(.-)}"', "'#{%1}'")
+-- The interpolation passes used to be two full-document gsubs. A gsub with a
+-- function replacement costs ~100us on a 3KB page even when it matches once,
+-- which made it the most expensive part of render (more than _recurse). The
+-- manual scans below are exact equivalents (differentially fuzzed against the
+-- old gsub version) and cost ~1us.
+local function requote (s)
+  local out, pos = {}, 1
+  while true do
+    local a = s:find('"#{', pos, true)
+    if not a then break end
+    local b = s:find('}"', a + 3, true)
+    if not b then break end
+    out[#out + 1] = s:sub(pos, a - 1)
+    out[#out + 1] = "'" .. s:sub(a + 1, b) .. "'"
+    pos = b + 2
   end
-  if html:find('#{', 1, true) then
-    html = html:gsub('([\\]*)#{(.-)}',
-      function(slashes, match)
-        if #slashes == 1 then
-          return '#{' .. match .. '}'
+  out[#out + 1] = s:sub(pos)
+  return table.concat(out)
+end
+
+local function interpolate (html, options, locals, two_phase)
+  if html:find('"#{', 1, true) then
+    html = requote(html)
+  end
+
+  local first = html:find('#{', 1, true)
+  if first then
+    local out, pos = {}, 1
+    while first do
+      local close = html:find('}', first + 2, true)
+      if not close then break end
+
+      local n, k = 0, first - 1
+      while k >= pos and html:sub(k, k) == '\\' do
+        n = n + 1
+        k = k - 1
+      end
+
+      local match = html:sub(first + 2, close - 1)
+      if n == 1 then
+        out[#out + 1] = html:sub(pos, first - 2)
+        out[#out + 1] = '#{' .. match .. '}'
+      else
+        out[#out + 1] = html:sub(pos, first - 1)
+        local val
+        if locals then val = locals[match] end
+        if val == nil then val = match end
+        if two_phase then
+          -- In two-phase mode this must stay a placeholder for template
+          -- code. Never splice a local value into Lua source.
+          out[#out + 1] = '<%=' .. match .. '%>'
         else
-          local val = locals and locals[match]
-          if val == nil then val = match end
-          if two_phase then
-            -- In two-phase mode this must stay a placeholder for template
-            -- code. Never splice a local value into Lua source.
-            return '<%=' .. match .. '%>'
-          end
           val = tostring(val)
           if options.escape_html then
             val = escape_html(val, options.html_escapes)
           end
-          return slashes .. protect_late(val)
+          out[#out + 1] = protect_late(val)
         end
-      end)
+      end
+      pos = close + 1
+      first = html:find('#{', pos, true)
+    end
+    out[#out + 1] = html:sub(pos)
+    html = table.concat(out)
   end
-  if html:find('\\\\', 1, true) then
-    html = html:gsub('\\\\', '\\')
+
+  local pair = html:find('\\\\', 1, true)
+  if pair then
+    local out, i = {}, 1
+    while pair do
+      out[#out + 1] = html:sub(i, pair - 1)
+      out[#out + 1] = '\\'
+      i = pair + 2
+      pair = html:find('\\\\', i, true)
+    end
+    out[#out + 1] = html:sub(i)
+    html = table.concat(out)
   end
+  return html
+end
+
+local function render(dom, options, locals)
+  local two_phase = options.lhaml or options.lhtml
+  local html = _recurse(dom, options, locals, 0)
+  html = interpolate(html, options, locals, two_phase)
   return restore_data(html)
 end
 

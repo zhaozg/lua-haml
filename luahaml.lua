@@ -2,6 +2,12 @@
 local haml = require "haml/init"
 local util = require "haml/util"
 local long_bracket_level = util.long_bracket_level
+local eq_cache = {}
+local function eqs (n)
+  local e = eq_cache[n]
+  if not e then e = string.rep('=', n); eq_cache[n] = e end
+  return e
+end
 
 -- The CLI has no sandbox: templates (and any data a caller wires in) run in
 -- the host process.  Read the version from the checkout instead of the stale
@@ -81,7 +87,7 @@ local function render(haml_string)
     -- coded four '=' here and three in lhtml; any text containing the matching
     -- terminator escaped the string and became Lua code.
     local function interpolate_code (str, lvl)
-      local eq = string.rep('=', lvl)
+      local eq = eqs(lvl)
       local close = ']' .. eq .. ']) io.write('
       local open = ') io.write([' .. eq .. '['
       return str:gsub('([\\]*)#{(.-)}', function(slashes, match)
@@ -93,7 +99,7 @@ local function render(haml_string)
     end
 
     local function wrap_write (code, lvl)
-      local eq = string.rep('=', lvl)
+      local eq = eqs(lvl)
       return string.format('io.write([%s[%s]%s])', eq, code, eq)
     end
 

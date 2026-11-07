@@ -161,5 +161,27 @@
       "html" : "<p>&lt;%! /etc/passwd %></p>",
       "locals" : { "x" : "<%! /etc/passwd %>" }
     }
+  },
+  "patch: interpolation shapes" : {
+    "several interpolations" : {
+      "haml" : "%p a#{x}b#{y}c",
+      "html" : "<p>aXbYc</p>",
+      "locals" : { "x" : "X", "y" : "Y" }
+    },
+    "unclosed interpolation stays literal" : {
+      "haml" : "%p #{x} and #{y",
+      "html" : "<p>X and #{y</p>",
+      "locals" : { "x" : "X" }
+    },
+    "escaped interpolation" : {
+      "haml" : "%p \\#{x}",
+      "html" : "<p>#{x}</p>",
+      "locals" : { "x" : "X" }
+    },
+    "quoted interpolation is requoted" : {
+      "haml" : "%p \"#{x}\"",
+      "html" : "<p>'X'</p>",
+      "locals" : { "x" : "X" }
+    }
   }
 }

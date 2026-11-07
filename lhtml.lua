@@ -17,19 +17,25 @@ local CODE = B * Cg(I,'INS')*C(NE*Cb('INS')) * E
 local STRAY = B * (1 - E)^0
 
 local long_bracket_level = util.long_bracket_level
+local eq_cache = {}
+local function eqs (n)
+    local e = eq_cache[n]
+    if not e then e = string.rep('=', n); eq_cache[n] = e end
+    return e
+end
 
 -- Wrap text so that no `]=*]` inside it can terminate the long string early.
 local function wrap_text (code)
     local lvl = long_bracket_level(code)
     if lvl < 3 then lvl = 3 end
-    local eq = string.rep('=', lvl)
+    local eq = eqs(lvl)
     return 'print([' .. eq .. '[' .. code .. ']' .. eq .. '])'
 end
 
 -- Wrap include()/at() arguments at the level the argument itself needs.
 local function wrap_arg (code)
     local lvl = long_bracket_level(code)
-    local eq = string.rep('=', lvl)
+    local eq = eqs(lvl)
     return '([' .. eq .. '[' .. code .. ']' .. eq .. '])'
 end
 

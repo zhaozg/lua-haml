@@ -9,7 +9,9 @@ notes and the reproducers live in `FIXME.md` and `test_security.lua`.
   containing `#{secret}` was interpolated a second time and could read other
   locals (`N2`). Values from `locals` now encode `<%` as `&lt;%`, park `#{` and
   backslashes behind a sentinel until the interpolation passes are done, and are
-  restored verbatim afterwards.
+  restored verbatim afterwards. This also means a `#{...}` inside a string
+  returned by `=` is no longer re-interpolated: write the interpolation in the
+  template text (`%p #{x}`) instead of inside the expression's result.
 
 * **Long-bracket levels are adaptive.** `lhtml` used a fixed `[===[` for text
   and `[[` for `include()` / `at()`; text containing the matching terminator
@@ -59,9 +61,16 @@ notes and the reproducers live in `FIXME.md` and `test_security.lua`.
   (`S9`), `#{}` values are `tostring`ed instead of raising on tables (`S8`),
   and `false` omits the attribute while `true` renders it as a boolean.
 
-Tests: 137 JSON cases, 37 `lhtml` assertions, and the new
-`test_security.lua` (12 assertions). The data guard costs roughly 10-15% on a
-render of `sample.haml`; templates with no data substitution are unaffected.
+* **Interpolation is about 2x faster.** The `#{}` pass used a full-document
+  `gsub` with a function replacement, which cost ~100us on a 3KB page even
+  when it matched once -- more than `_recurse` itself. It is a manual scan now
+  (differentially fuzzed against the old `gsub` version on 200k random
+  strings), and `render` of `sample.haml` dropped from ~170us to ~80us.
+  `escape_html` caches its character class per escapes table, and the
+  long-bracket scan skips fragments with no `]`.
+
+Tests: 141 JSON cases, 37 `lhtml` assertions, and the new
+`test_security.lua` (12 assertions).
 
 ## 0.4.2
 

@@ -18,12 +18,17 @@ local function preserve_filter (node, options, parent)
   return content:gsub("\n", '&#x000A;'):gsub("\r", '&#x000D;')
 end
 
+local escape_patterns = setmetatable({}, { __mode = 'k' })
 local function escape_html (str, escapes)
-  local chars = {}
-  for k, _ in pairs(escapes) do
-    insert(chars, k)
+  local pattern = escape_patterns[escapes]
+  if not pattern then
+    local chars = {}
+    for k, _ in pairs(escapes) do
+      insert(chars, k)
+    end
+    pattern = ("([%s])"):format(concat(chars, ""))
+    escape_patterns[escapes] = pattern
   end
-  local pattern = ("([%s])"):format(concat(chars, ""))
   return (str:gsub(pattern, escapes))
 end
 
