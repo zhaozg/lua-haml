@@ -138,7 +138,39 @@ print(full([[- local t = "Hi"
 
 只想看单阶段时，直接用 `haml.render(tpl, opts, locals)`。
 
+### 性能特征（实测，LuaJIT，`sample.haml` 2892 字节）
+
+```
+parse + compile + render   ~600 µs
+  ├─ parse                 ~320 µs
+  ├─ compile               ~120 µs
+  └─ render                ~150 µs
+```
+
+**parse+compile 是 render 的 2.4 倍；模板越小差距越大**（186 字节模板实测 10.9 倍）。
+
+所以：**编译一次，缓存，反复 render**。`haml.render(compiled_table)` 是受支持的，
+而且从 0.4.2 起是幂等的——早期版本 `_recurse` 会就地削掉 AST 的元数据
+（`tag`/`space`/`operator`…），同一个编译产物只能渲染一次，第二次只剩一个换行。
+`bench.lua` 开头有断言锁住这一点。
+
+```lua
+-- 推荐：编译一次
+local tpl = haml.compile(haml.parse(source), options)
+for _ = 1, n do haml.render(tpl, options, locals) end   -- ~150 µs/次
+
+-- 反例：每次都从头（~600 µs/次）
+for _ = 1, n do haml.render(source, options, locals) end
+```
+
+其它已做的优化，改动时勿回退：
+
+- `haml/parser.lua` 两个属性 grammar（html-style / ruby-style）是模块级常量——每次重建要 15 µs，是匹配本身的 16 倍。
+- `lhtml.lua` 默认 handler 的 grammar 有缓存（自定义 handler 仍每次重建，因为 handler 被编进了 pattern）。
+- `haml/render.lua` 尾部三个全串 `gsub` 各自有 `find` 守卫；无 `#{}` 的模板因此省约 30 µs。
+
 ---
+
 
 ## 6. 测试怎么写
 
@@ -246,6 +278,7 @@ git stash pop
 | 6 | 多行 `\|` 续行**必须每行都以 `\|` 结尾**，漏写则续行静默丢失 | `haml/parser.lua` `multiline_text` | 文档已标注；若要改为容错需加用例 |
 | 7 | `%a(flag)` 原子属性在 xhtml 下也输出裸 `flag` | `haml/render.lua` 布尔分支 | 既有用例锁定该行为，改动需确认 |
 | 8 | `suppress_eval` / `ugly` 声明了但无实现 | `haml/init.lua` | **不能当安全开关**，模板一律视为可信代码 |
+| 9 | **CLI 输出逐次不稳定**：`sample.haml` 含 `pairs(greetings)`，40 次运行产出 4 种不同顺序 | `sample.haml:27` | 同陷阱 #3。比对输出时**不要**用 `cmp`/`md5`，要比较排序后的行或输出集合 |
 
 ---
 
@@ -255,6 +288,7 @@ git stash pop
 - [ ] 改动过 `lhtml.lua` → `luajit test_lhtml.lua` 输出 `Test all passed (33 assertions)`
 - [ ] 新增用例在旧代码上会失败（回归有效性已验）
 - [ ] `luajit luahaml.lua sample.haml` 输出无异常、无 `<%= %>` 残留
+- [ ] 改过渲染/解析热路径 → `luajit bench.lua sample.haml 3000`，`render only (cached)` 无意外劣化
 - [ ] 行为有变更 → `REFERENCE.md` 对应章节已更新，且示例**实测过**
 - [ ] 版本变更 → `VERSION` + `lit-meta` + `Changelog.md` 三处同步
 - [ ] `git status` 中**没有** `spec/` 相关改动

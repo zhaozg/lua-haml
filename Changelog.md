@@ -1,3 +1,33 @@
+## 0.4.2
+
+* `haml.render` is now repeatable. `_recurse` used to strip the metadata keys
+  (`tag`, `space`, `operator`, ...) off the tree it was handed, so a compiled
+  template rendered correctly exactly once and returned a bare newline on every
+  later call. It now works on a shallow copy per node. This also makes template
+  caching viable: parse+compile cost 2.4x a render on `sample.haml`, and 10.9x
+  on a small template, so compiling once and re-rendering is now the fast path.
+
+* Parser: the html-style and ruby-style attribute grammars were rebuilt on
+  every call to `parse_html_style_attributes` / `parse_ruby_style_attributes`.
+  Building one cost about 15us, roughly sixteen times the cost of matching an
+  attribute list, and it was paid once per tag carrying attributes. They are
+  now built once at load time (~26% faster parse on `sample.haml`).
+
+* Render: the three whole-output `gsub` passes at the end of `render` (quote
+  conversion, `#{}` interpolation, backslash unescaping) ran unconditionally
+  and cost more between them than the recursive walk did. Each now runs only
+  when a plain `find` shows its literal is present -- about 30us saved on
+  templates with no interpolation.
+
+* `lhtml`: the LPeg grammar was rebuilt on every `compile()` call. The default
+  handler's grammar is now built once (a caller-supplied handler still gets its
+  own, since the handler is baked into the pattern). ~24% faster.
+
+* `bench.lua`: it reused a single compiled template in its "Render" loop,
+  which meant it was timing a tree that the first iteration had already
+  destroyed. It now asserts that two renders agree before measuring, and
+  reports per-operation timings.
+
 ## 0.4.1
 
 * Render inline scripts instead of leaving placeholders. `%p= foo` now

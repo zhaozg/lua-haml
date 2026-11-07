@@ -33,11 +33,25 @@ local function _totable(code,ins)
 end
 
 --compile and return captured table
+-- Building the grammar costs more than running it, so the default-handler
+-- grammar is built once and reused. A caller-supplied handler still gets a
+-- grammar of its own, since the handler is baked into the pattern.
+local default_grammar
 local function compile(s, handle)
-    handle = handle or _totable
-    local NBH = NB/handle
-    local CODEH = CODE/handle
-    local grammer = Ct ( (NBH * CODEH)^0  * NBH)
+    local grammer
+    if handle == nil or handle == _totable then
+        grammer = default_grammar
+        if not grammer then
+            local NBH = NB/_totable
+            local CODEH = CODE/_totable
+            grammer = Ct ( (NBH * CODEH)^0  * NBH)
+            default_grammar = grammer
+        end
+    else
+        local NBH = NB/handle
+        local CODEH = CODE/handle
+        grammer = Ct ( (NBH * CODEH)^0  * NBH)
+    end
     return grammer:match(s)
 end
 

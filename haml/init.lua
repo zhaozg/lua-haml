@@ -1,6 +1,6 @@
 --[[lit-meta
   name = "lua/haml"
-  version = "0.4.1"
+  version = "0.4.2"
   homepage = "https://github.com/zhaozg/lua-haml"
   description = "Haml markup language for Lua"
   tags = { "haml", "html" }
