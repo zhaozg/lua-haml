@@ -8,6 +8,7 @@ local tostring = tostring
 local unpack = unpack or table.unpack
 local insert = table.insert
 local concat = table.concat
+local sort = table.sort
 local format = string.format
 local gsub = string.gsub
 
@@ -143,8 +144,6 @@ local function tag_for (node, options, parent)
 
   if node.inline_content then
     ctx = node.inline_content
-  elseif node.inner_whitespace_modifier then
-    ctx = concat(node, options.newline)
   end
 
   if ctx then
@@ -153,6 +152,7 @@ local function tag_for (node, options, parent)
     for k, v in pairs(T) do
       a[#a + 1] = type(v) == 'string' and format('%s=%s', k, v) or format('%s="%s"', k, concat(v, ' '))
     end
+    sort(a)
     node = #a > 0 and format('<%s %s>%s</%s>', node.tag, concat(a, ' '), ctx, node.tag) or format('<%s>%s</%s>', node.tag, ctx, node.tag)
   else
     node = join_tables(node, node.css, unpack(node.attributes or {}))
@@ -204,7 +204,7 @@ local function handle_node (node, options, locals, parent)
   elseif operator == "markup_comment" or operator == "conditional_comment" then
     node = comment_for(node, options)
   elseif operator == "script" then
-    if options.escape_html then
+    if options.escape_html and node.code then
       node[1] = filter.escape_html(loadstring('return ' .. node.code)(), options.html_escapes)
       node.code = nil
       node.script = nil

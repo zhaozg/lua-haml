@@ -24,22 +24,68 @@ local function handle_code(code, locals)
   end
 end
 
-local function _recurse(node, options, locals, lvl)
+local function try_code (code, locals)
+  local f = loadstring(code)
+  if not f then
+    return nil, false
+  end
+  if locals then
+    setfenv(f, locals)
+  end
+  local ok, v = pcall(f)
+  if not ok then
+    return nil, false
+  end
+  return v, true
+end
+
+local function escape_html (str, escapes)
+  local chars = {}
+  for k in pairs(escapes) do
+    chars[#chars + 1] = k
+  end
+  local pattern = ('([%s])'):format(concat(chars, ""))
+  return (str:gsub(pattern, escapes))
+end
+
+local function _recurse(node, options, locals, lvl, tight)
   lvl = lvl or 0
   if type(node) == 'string' or node == nil then
     return node
   end
   assert(type(node), 'table')
   local tag = node.tag
+  local inner_ws = node.inner_whitespace_modifier
+  tight = tight or inner_ws == '<'
   local pad = options.tidy and string.rep(options.indent, lvl) or ''
   local A, B, kT, vT = {}, {}, nil, nil
   local self_closing_modifier, inline_content = node.self_closing_modifier, node.inline_content
   node.space, node.tag, node.self_closing_modifier, node.inline_content = nil, nil, nil, nil
+  node.inner_whitespace_modifier, node.outer_whitespace_modifier = nil, nil
 
-  if node.inline_code and node.operator == 'script' then
-    inline_content = '<%= ' .. node.inline_code .. ' %>'
+  local inline_op = node.operator
+  if node.inline_code and inline_op then
+    local code = node.inline_code
     node.inline_code = nil
     node.operator = nil
+    if options.lhaml then
+      inline_content = '<%= ' .. code .. ' %>'
+    else
+      local v, ok = try_code('return ' .. code, locals)
+      if ok and v ~= nil then
+        local out = tostring(v)
+        if inline_op == 'escaped_script'
+            or (inline_op == 'script' and options.escape_html) then
+          out = escape_html(out, options.html_escapes)
+        end
+        inline_content = out
+      elseif inline_op == 'script' then
+        -- Not resolvable yet: keep the placeholder for the lhtml stage.
+        inline_content = '<%= ' .. code .. ' %>'
+      else
+        inline_content = ''
+      end
+    end
   end
   if tag == '=' then
     if options.lhaml then
@@ -69,13 +115,16 @@ local function _recurse(node, options, locals, lvl)
       if vT == 'string' then
         B[#B + 1] = options.preserve[tag] and v or pad .. v
       else
-        B[#B + 1] = _recurse(v, options, locals, lvl + 1)
+        B[#B + 1] = _recurse(v, options, locals, lvl + 1, tight)
       end
     else
       --attribute
       if vT == 'string' then
-        if k == 'checked' and v == 'true' then
-          A[#A + 1] = options.format == 'xhtml' and format "checked='checked'" or 'checked'
+        if v == 'false' or v == 'nil' then
+          -- boolean false/nil: omit the attribute entirely
+        elseif v == 'true' then
+          -- boolean true: attr='attr' for xhtml, bare attr otherwise
+          A[#A + 1] = options.format == 'xhtml' and format("%s='%s'", k, k) or k
         elseif v:match '".-"' or v:match "'.-'" then
           A[#A + 1] = format('%s=%s', k, v)
         else
@@ -103,13 +152,15 @@ local function _recurse(node, options, locals, lvl)
         end
         A[#A + 1] = format('%s=%s', k, v)
       elseif vT == 'boolean' then
-        A[#A + 1] = k
+        if v then
+          A[#A + 1] = k
+        end
       end
     end
   end
 
   if tag then
-    if options.preserve[tag] then
+    if options.preserve[tag] or ((inner_ws == '<' or tight) and #B > 0) then
       B = {
         concat(B, options.newline),
       }
@@ -145,7 +196,10 @@ local function _recurse(node, options, locals, lvl)
       insert(B, format('%s</%s>', pad, tag))
     end
   end
-  if node.inner_whitespace_modifier == '>' or (tag and options.preserve[tag]) then
+  if inner_ws == '>'
+      or inner_ws == '<'
+      or tight
+      or (tag and options.preserve[tag]) then
     return concat(B, '')
   else
     return concat(B, options.newline)

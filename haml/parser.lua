@@ -22,7 +22,19 @@ local inline_whitespace = S " \t"
 local eol = P "\n" + P("\r\n") + P("\r")
 local empty_line = Cg(P "", "empty_line")
 local multiline_modifier = Cg(P "|", "multiline_modifier")
-local unparsed = Cg((1 - eol - multiline_modifier)^1, "unparsed")
+-- A `|` only acts as a line terminator when nothing but blanks follow it,
+-- so a mid-line pipe is ordinary text.
+local pipe_eol = P "|" * inline_whitespace^0 * #(eol + -1)
+local unparsed = Cg((1 - eol - pipe_eol)^1, "unparsed")
+
+-- Multiline support: every continued line has to end with `|`.
+local function join_multiline (a)
+  return (a:gsub("%s*|%s*", " "):gsub("%s+$", ""))
+end
+
+local multiline_seg  = (1 - eol - P "|")^1 * P "|"
+local multiline_cont = eol * inline_whitespace^1 * (1 - eol - P "|")^1 * P "|"
+local multiline_text = (multiline_seg * multiline_cont^0) * inline_whitespace^0 * #(eol + -1)
 local default_tag = "div"
 local singlequoted_string = P("'" * ((1 - S "'\r\n\f\\") + (P '\\' * 1))^0 * "'")
 local doublequoted_string = P('"' * ((1 - S '"\r\n\f\\') + (P '\\' * 1))^0 * '"')
@@ -174,15 +186,15 @@ local syntax = {
   attributes            = Cg(Ct((V'any_attributes' * V'any_attributes'^0)) / flatten, "attributes"),
 
   --inline
-  inline_code         = V'script' * inline_whitespace^0 * Cg(unparsed^0 * -multiline_modifier /
+  inline_script_operator = V'script' + V'escaped_script' + V'unescaped_script',
+  inline_code         = V'inline_script_operator' * inline_whitespace^0 * Cg(unparsed^0 * -multiline_modifier /
                         function (a)
                           return a:gsub("\\", "\\\\")
                         end, "inline_code"),
-  multiline_code      = V'script' * inline_whitespace^0 * Cg(((1 - multiline_modifier)^1 * multiline_modifier)^0 /
-                        function (a)
-                          return a:gsub("%s*|%s*", " ")
-                        end, "inline_code"),
-  inline_content      = inline_whitespace^0 * Cg(unparsed, "inline_content"),
+  multiline_code      = V'inline_script_operator' * inline_whitespace^0 * Cg(((1 - multiline_modifier)^1 * multiline_modifier)^0 /
+                        join_multiline, "inline_code"),
+  inline_content      = inline_whitespace^0 * (Cg(multiline_text / join_multiline, "inline_content")
+                        + Cg(unparsed, "inline_content")),
 
 -- css and tag
   css                 = P{
@@ -211,8 +223,8 @@ local syntax = {
     V'haml_header' +
     -- Silent comment
     V'silent_comment' * (inline_whitespace^0 * Cg(unparsed^0, "comment") * nested_content) +
-    -- Script
-    V'script_operator' * inline_whitespace^1 * Cg(unparsed^0, "code") +
+    -- Script (supports multiline `|` continuation)
+    V'script_operator' * inline_whitespace^1 * (Cg(multiline_text / join_multiline, "code") + Cg(unparsed^0, "code")) +
     -- IE conditional comments
     (V'conditional_comment' * Cg((P(1) - "]")^1, "condition")) * "]" +
     -- Markup comment
