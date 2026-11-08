@@ -69,8 +69,18 @@ notes and the reproducers live in `FIXME.md` and `test_security.lua`.
   `escape_html` caches its character class per escapes table, and the
   long-bracket scan skips fragments with no `]`.
 
-Tests: 141 JSON cases, 37 `lhtml` assertions, and the new
-`test_security.lua` (12 assertions).
+* **Compiled templates are consistently cacheable.** `haml.compile` returned a
+  bare string for single-node templates (`%p hi` -> `"<p>hi</p>"`), and
+  `haml.render` treated that string as Haml source and re-parsed it, so
+  "compile once" silently did no such thing for small templates (and could
+  re-interpret compiled markup as template text). It always returns a table
+  now, tagged so `render` can reject a parsed-but-uncompiled AST instead of
+  emitting malformed HTML; recompiling an already compiled tree is an error.
+  `lhtml` caches its last translation per handler: repeated two-phase renders
+  drop from ~50us to ~1us. A transcript of the audit is in the 0.4.3 notes.
+
+Tests: 141 JSON cases, 41 `lhtml` assertions, and the new
+`test_security.lua` (16 assertions).
 
 ## 0.4.2
 

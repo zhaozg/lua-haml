@@ -46,8 +46,8 @@
 | N6 parse 吞错 | 已修复 | 解析错误上抛；CLI 返回非零退出码 |
 | N7 其余 | 部分修复 | `= 1+1` + `escape_html`、属性布尔值、反斜杠保留已修；`:escaped` / `:javascript` 内插值的上下文转义仍是已知限制（见 `REFERENCE.md#已知缺陷与限制`） |
 
-修复后的回归：`test.lua` 141 例、`test_lhtml.lua` 37 条断言、
-`test_security.lua` 12 条断言。
+修复后的回归：`test.lua` 141 例、`test_lhtml.lua` 41 条断言、
+`test_security.lua` 16 条断言。
 
 ---
 

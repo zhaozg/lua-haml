@@ -300,6 +300,22 @@ do
   eq(T .. ': unmatched <% is preserved when run', render('a <% b'), 'a <% b')
 end
 
+do
+  local T = 'translation cache'
+
+  -- Repeated translations are cached per handler; a different source must not
+  -- return the previous chunks, and mutating the returned table must not
+  -- poison the cache.
+  eq(T .. ': a repeated source is stable', translate('one'), 'print([===[one]===])')
+  eq(T .. ': a different source is re-translated', translate('two'), 'print([===[two]===])')
+  eq(T .. ': the first source still translates', translate('one'), 'print([===[one]===])')
+
+  local chunks = compile('poison')
+  chunks[1] = 'broken'
+  eq(T .. ': mutating the result does not poison the cache',
+     translate('poison'), 'print([===[poison]===])')
+end
+
 ------------------------------------------------------------------------------
 --- Summary
 ------------------------------------------------------------------------------

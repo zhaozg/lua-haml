@@ -142,6 +142,49 @@ item 1
 </ul>
 ```
 
+### 编译与缓存
+
+`haml.compile` 接受 Haml 源码或 `haml.parse` 的 AST，**总是返回一个 table**，
+并用元表标记为编译产物：
+
+```lua
+local tpl = haml.compile(haml.parse(source), options)
+
+-- 可以反复 render，渲染不会修改编译产物
+for _ = 1, n do
+  local html = haml.render(tpl, options, locals)
+end
+```
+
+注意：
+
+- `haml.render(table)` 只接受 `haml.compile` 的产物。误传 `haml.parse` 的结果会报
+  `haml: render expects Haml source or a compiled template`，不再静默输出畸形 HTML。
+- `haml.compile(compiled)` 会报 `haml: input is already compiled`。
+- 编译时会把 `format` / `escape_html`（对 `&=` / `!=` / `~`）/ `preserve` 等选项
+  烘进产物，**render 时应传同一组选项**。
+- 编译产物带元表；不要把它序列化成 JSON 再读回来（标记会丢）。
+
+两阶段管道可以进一步缓存 `lhtml` 的翻译结果：
+
+```lua
+local compiled = haml.compile(haml.parse(tpl), { lhaml = true })
+
+-- 中间态只依赖模板，跨 request 稳定（locals 在第二阶段求值）
+local mid  = haml.render(compiled, { lhaml = true }, {})
+local code = table.concat(lhtml(mid), "")
+
+for _ = 1, n do
+  local fn = assert(loadstring(code))   -- ~14 µs/次；code 字符串可自行缓存
+  setfenv(fn, env)                      -- env 里放 locals / print
+  fn()
+end
+```
+
+`lhtml` 会按 handler 缓存**最后一份**翻译结果（再次调用同一输入约 1 µs，首次约
+50–60 µs）。返回的是副本，修改它不会污染缓存；`loadstring` 不在缓存范围内，
+因为它取决于每次请求的执行环境。
+
 ### 直接调用 `haml.render` 的局限
 
 ```lua
@@ -178,7 +221,7 @@ haml.render(haml_string_or_compiled, options, locals)
 
 | 参数 | 说明 |
 |---|---|
-| 第 1 个 | Haml 字符串，或已编译的 AST 表 |
+| 第 1 个 | Haml 字符串，或 `haml.compile` 返回的编译产物（不能是 `haml.parse` 的裸 AST） |
 | 第 2 个 | 选项表，见 [选项](#选项) |
 | 第 3 个 | `locals` 表，供 `#{}` 插值与属性值解析使用 |
 

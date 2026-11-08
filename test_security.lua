@@ -115,6 +115,21 @@ do
 end
 
 ------------------------------------------------------------------------------
+--- compiled-template contract
+------------------------------------------------------------------------------
+
+do
+  local c = haml.compile(haml.parse('%p hi'), {})
+  ok('compile always returns a table', type(c) == 'table')
+  ok('a compiled template renders', haml.render(c, {}) == '<p>hi</p>')
+
+  raises('render rejects a parsed AST',
+     function () haml.render(haml.parse('%p hi'), {}) end, 'compiled template')
+  raises('compile rejects an already compiled tree',
+     function () haml.compile(c, {}) end, 'already compiled')
+end
+
+------------------------------------------------------------------------------
 --- small robustness checks
 ------------------------------------------------------------------------------
 

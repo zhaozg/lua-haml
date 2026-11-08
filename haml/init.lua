@@ -14,6 +14,8 @@ local util = require "haml/util"
 local select = select
 local type = type
 local pairs = pairs
+local getmetatable = getmetatable
+local setmetatable = setmetatable
 
 --- An implementation of the Haml markup language for Lua.
 -- <p>
@@ -89,6 +91,14 @@ end
 
 local M = {}
 
+-- Marks a table as the output of compile().  `compile` used to return a plain
+-- string whenever the template had a single top-level node, and render() would
+-- then treat that string as Haml source and re-parse it -- so "compile once,
+-- render many" silently did nothing for small templates (and could
+-- re-interpret the compiled markup as template text).  Always return a table
+-- and tag it.
+local COMPILED = { __haml_compiled = true }
+
 function M.parse (haml_string,options)
   return parser(haml_string:gsub('^' .. string.char(0xEF, 0xBB, 0xBF), ''),options)
 end
@@ -97,8 +107,14 @@ function M.compile (input, options, locals)
   options = merge_tables(_options, options or {})
   if type(input) == 'string' then
     input = parser(input)
+  elseif type(getmetatable(input)) == 'table' and getmetatable(input).__haml_compiled then
+    error("haml: input is already compiled", 0)
   end
-  return compile(input, options, locals)
+  local out = compile(input, options, locals)
+  if type(out) ~= 'table' then
+    out = { out }
+  end
+  return setmetatable(out, COMPILED)
 end
 
 --- Render a Haml file.
@@ -112,6 +128,10 @@ function M.render (haml_string, options, locals)
     local parsed = M.parse(haml_string)
     compiled = compile(parsed, options, locals)
   else
+    local mt = getmetatable(haml_string)
+    if not (type(mt) == 'table' and mt.__haml_compiled) then
+      error("haml: render expects Haml source or a compiled template (haml.compile)", 0)
+    end
     compiled = haml_string
   end
   return render(compiled, options, locals)

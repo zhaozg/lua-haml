@@ -70,18 +70,41 @@ local function build_grammar (handle)
 end
 
 local default_grammar
+-- Translation is pure, and the two-phase pipeline renders the same
+-- intermediate string once per request, so cache the last translation per
+-- handler.  A weak key lets throw-away handler closures be collected; the
+-- chunks are shared and must be treated as read-only.
+local last_translation = setmetatable({}, { __mode = 'k' })
+local function copy_chunks (t)
+    local out, n = {}, #t
+    for i = 1, n do out[i] = t[i] end
+    return out
+end
 local function compile(s, handle)
+    local h = handle or _totable
+    local cached = last_translation[h]
+    if cached and cached.source == s then
+        return copy_chunks(cached.chunks)
+    end
+
     local grammer
-    if handle == nil or handle == _totable then
+    if h == _totable then
         grammer = default_grammar
         if not grammer then
             grammer = build_grammar(_totable)
             default_grammar = grammer
         end
     else
-        grammer = build_grammar(handle)
+        grammer = build_grammar(h)
     end
-    return grammer:match(s)
+
+    local chunks = grammer:match(s)
+    if chunks then
+        -- Keep a private copy so mutating the returned table cannot poison
+        -- the cache.
+        last_translation[h] = { source = s, chunks = copy_chunks(chunks) }
+    end
+    return chunks
 end
 
 return compile

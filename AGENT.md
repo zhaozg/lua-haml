@@ -42,7 +42,7 @@ Lua 5.1 兼容的具体禁令：不用 `goto`、不用 `//`、不用位运算符
 | `lhtml.lua` | `<% %>` 占位符 → Lua 源码 | 改**两阶段管道**的中间格式 |
 | `luahaml.lua` | CLI | 改命令行行为 |
 | `test.lua` | 测试驱动（读 JSON 套件） | 加测试套件、改断言语义 |
-| `test_lhtml.lua` | **`lhtml.lua` 的单元测试**（37 条断言，失败退出码 1） | 改 `lhtml.lua` 时必跑 |
+| `test_lhtml.lua` | **`lhtml.lua` 的单元测试**（41 条断言，失败退出码 1） | 改 `lhtml.lua` 时必跑 |
 | `test_security.lua` | 错误路径测试（`strict_eval`、深度上限、解析错误、编译期求值） | 改求值/解析/限制时必跑 |
 | `tests_patch.json` | **本项目自己的回归用例**（4 组 23 例） | 加用例默认放这里 |
 | `spec/*.json` | 上游 `haml-spec` 套件（子模块，共 104 例） | 只读，不改 |
@@ -99,8 +99,8 @@ Haml 源码
 
 ```bash
 luajit test.lua                          # 全部 JSON 套件，通过时输出 "Test all passed"
-luajit test_lhtml.lua                    # lhtml 单元测试，通过时输出 "Test all passed (37 assertions)"
-luajit test_security.lua                 # 错误路径测试，通过时输出 "Test all passed (12 assertions)"
+luajit test_lhtml.lua                    # lhtml 单元测试，通过时输出 "Test all passed (41 assertions)"
+luajit test_security.lua                 # 错误路径测试，通过时输出 "Test all passed (16 assertions)"
 luajit test.lua | grep -c '^Ok'          # 统计通过数（当前 141）
 luajit luahaml.lua sample.haml           # 端到端渲染
 echo '%p hi' | luajit luahaml.lua -s     # 从 stdin 渲染
@@ -151,29 +151,47 @@ parse + compile + render   ~510 µs
 ```
 
 **parse+compile 是 render 的 5 倍左右；模板越小差距越大**（186 字节模板实测 10.9 倍）。
-0.4.3 把 `#{}` 的全串 `gsub` 换成了手写扫描，render 从约 170 µs 降到约 80 µs；
-再加 `lhtml` 约 60 µs。数据保护（`protect_data`）只作用于从 `locals` 来的值，
-无插值的模板几乎不付这个成本。
+0.4.3 把 `#{}` 的全串 `gsub` 换成了手写扫描，render 从约 170 µs 降到约 75–85 µs；
+`lhtml` 的翻译结果按 handler 缓存最后一份，重复翻译约 1 µs（首次约 50–60 µs）。
+数据保护（`protect_data`）只作用于从 `locals` 来的值，无插值的模板几乎不付这个成本。
 
-所以：**编译一次，缓存，反复 render**。`haml.render(compiled_table)` 是受支持的，
-而且从 0.4.2 起是幂等的——早期版本 `_recurse` 会就地削掉 AST 的元数据
-（`tag`/`space`/`operator`…），同一个编译产物只能渲染一次，第二次只剩一个换行。
-`bench.lua` 开头有断言锁住这一点。
+所以：**parse+compile 一次，缓存编译产物，反复 render**。
 
 ```lua
--- 推荐：编译一次
-local tpl = haml.compile(haml.parse(source), options)
-for _ = 1, n do haml.render(tpl, options, locals) end   -- ~150 µs/次
+-- 单阶段（数据都从 locals 来）
+local tpl = haml.compile(haml.parse(source), options)   -- 总是返回 table
+for _ = 1, n do haml.render(tpl, options, locals) end   -- ~80 µs/次
 
--- 反例：每次都从头（~600 µs/次）
+-- 两阶段 + 缓存 lhtml 生成结果
+local compiled = haml.compile(haml.parse(source), { lhaml = true })
+local mid = haml.render(compiled, { lhaml = true }, {})  -- 只依赖模板，跨 request 稳定
+local code = table.concat(lhtml(mid), "")                -- lhtml 命中缓存
+for _ = 1, n do
+  local fn = assert(loadstring(code))                    -- ~14 µs；可缓存 code 字符串
+  setfenv(fn, env)
+  fn()
+end
+
+-- 反例：每次都从头（~500 µs/次）
 for _ = 1, n do haml.render(source, options, locals) end
 ```
+
+编译产物契约（0.4.3 起）：
+
+- `haml.compile` **总是返回 table**（单节点模板以前会返回字符串，`render` 会把它当
+  Haml 源码重新 parse，缓存实际没生效）。
+- `haml.render(table)` 只接受带标记的编译产物；误传 `haml.parse` 的结果会直接报错，
+  不再静默输出畸形 HTML。
+- `haml.compile(compiled)` 会报 `input is already compiled`。
+- 编译产物可以反复 render（0.4.2 起幂等，`bench.lua` 有断言）；渲染不会改树。
 
 其它已做的优化，改动时勿回退：
 
 - `haml/parser.lua` 两个属性 grammar（html-style / ruby-style）是模块级常量——每次重建要 15 µs，是匹配本身的 16 倍。
-- `lhtml.lua` 默认 handler 的 grammar 有缓存（自定义 handler 仍每次重建，因为 handler 被编进了 pattern）。
-- `haml/render.lua` 尾部三个全串 `gsub` 各自有 `find` 守卫；无 `#{}` 的模板因此省约 30 µs。
+- `lhtml.lua` 默认 handler 的 grammar 有缓存；翻译结果也按 handler 缓存最后一份
+  （返回的是副本，调用方修改不会污染缓存）。
+- `haml/render.lua` 的 `#{}` / 引号 / 反斜杠三趟全串 `gsub` 已换成手写扫描：
+  无插值时只做 plain `find`，命中时约 1 µs（见 `interpolate`）。
 
 ---
 
@@ -291,8 +309,8 @@ git stash pop
 ## 11. 交付前自检清单
 
 - [ ] `luajit test.lua` 输出 `Test all passed`（连跑 2 次，排除 `pairs` 顺序导致的偶发）
-- [ ] `luajit test_security.lua` 输出 `Test all passed (12 assertions)`
-- [ ] 改动过 `lhtml.lua` → `luajit test_lhtml.lua` 输出 `Test all passed (37 assertions)`
+- [ ] `luajit test_security.lua` 输出 `Test all passed (16 assertions)`
+- [ ] 改动过 `lhtml.lua` → `luajit test_lhtml.lua` 输出 `Test all passed (41 assertions)`
 - [ ] 新增用例在旧代码上会失败（回归有效性已验）
 - [ ] `luajit luahaml.lua sample.haml` 输出无异常、无 `<%= %>` 残留
 - [ ] 改过渲染/解析热路径 → `luajit bench.lua sample.haml 3000`，`render only (cached)` 无意外劣化
