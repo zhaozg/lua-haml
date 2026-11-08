@@ -3,7 +3,7 @@
   version = "0.4.3"
   homepage = "https://github.com/zhaozg/lua-haml"
   description = "Haml markup language for Lua"
-  tags = { "haml", "html" }
+  tags = { "haml", "html", "lua" }
   license = "MIT"
 ]]
 local parser = require "haml/parser"

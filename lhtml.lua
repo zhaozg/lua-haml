@@ -1,3 +1,11 @@
+--[[lit-meta
+  name = "lua/lhtml"
+  version = "0.1.0"
+  homepage = "https://github.com/zhaozg/lua-haml/blob/master/lhtml.lua"
+  description = "html markup language for Lua"
+  tags = { "haml", "html", "lua" }
+  license = "MIT"
+]]
 local lpeg = require"lpeg"
 local util = require"haml/util"
 
