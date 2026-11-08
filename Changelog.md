@@ -1,7 +1,8 @@
 ## 0.4.3
 
-Security release. Every item below was reproduced before the fix; the audit
-notes and the reproducers live in `FIXME.md` and `test_security.lua`.
+Security release. Every item below was reproduced before the fix; the
+regression reproducers live in `test_security.lua` and the 0.4.3 commit
+history.
 
 * **Data is no longer executable template syntax.** A value rendered through
   `=`, `#{}` or an attribute used to reach the second stage verbatim, so a value
