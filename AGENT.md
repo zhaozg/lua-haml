@@ -19,7 +19,7 @@
 
 | # | 约束 | 原因 |
 |---|---|---|
-| 1 | **绝不往 `spec/` 写文件** | `spec/` 是指向 `haml-spec` 的 git **子模块**，改动会污染共享仓库、在主仓库里也不可见 |
+| 1 | **改 `spec/` 必须在子模块内单独提交，并同步父仓库指针** | `spec/` 是 `haml-spec` 的 git **子模块**；只在父仓库改 `.gitmodules`/文件不会生效，也不会出现在主仓库的普通 diff 里。`spec/tests_patch.json` 是本项目用例，其余文件尽量只读 |
 | 2 | **只写 Lua 5.1 / LuaJIT 兼容代码** | `haml/render.lua:2-3` 在模块顶层做 `local setfenv, loadstring = setfenv, loadstring`，在 5.2+ 上二者为 `nil`，直接崩 |
 | 3 | **不引入新依赖** | 运行时依赖仅 `lpeg`；JSON 用的是仓库自带的 `json.lua` |
 | 4 | **不要修改 `_options` 中已有默认值** | `haml/init.lua` 的默认值是兼容性契约（99 个上游用例依赖）。新行为请用 opt-in 选项 |
@@ -44,8 +44,8 @@ Lua 5.1 兼容的具体禁令：不用 `goto`、不用 `//`、不用位运算符
 | `test.lua` | 测试驱动（读 JSON 套件） | 加测试套件、改断言语义 |
 | `test_lhtml.lua` | **`lhtml.lua` 的单元测试**（41 条断言，失败退出码 1） | 改 `lhtml.lua` 时必跑 |
 | `test_security.lua` | 错误路径测试（`strict_eval`、深度上限、解析错误、编译期求值） | 改求值/解析/限制时必跑 |
-| `tests_patch.json` | **本项目自己的回归用例**（4 组 23 例） | 加用例默认放这里 |
-| `spec/*.json` | 上游 `haml-spec` 套件（子模块，共 104 例） | 只读，不改 |
+| `spec/tests_patch.json` | **本项目自己的回归用例**（子模块内） | 加用例默认放这里；改完在 `spec/` 里单独提交，再回父仓库提交指针 |
+| `spec/*.json` | 上游套件：`tests.json` 99 例、`tests_ext.json` 3 例、`tests_lhtml.json` 5 例（`tests_patch.json` 除外） | 只读，不改 |
 | `sample.haml` | 覆盖大部分语法的示例模板 | 端到端验证 |
 | `bench.lua` | 性能基准 | 改性能时 |
 
@@ -101,7 +101,7 @@ Haml 源码
 luajit test.lua                          # 全部 JSON 套件，通过时输出 "Test all passed"
 luajit test_lhtml.lua                    # lhtml 单元测试，通过时输出 "Test all passed (41 assertions)"
 luajit test_security.lua                 # 错误路径测试，通过时输出 "Test all passed (16 assertions)"
-luajit test.lua | grep -c '^Ok'          # 统计通过数（当前 141）
+luajit test.lua | grep -c '^Ok'          # 统计通过数（当前 144）
 luajit luahaml.lua sample.haml           # 端到端渲染
 echo '%p hi' | luajit luahaml.lua -s     # 从 stdin 渲染
 luajit luahaml.lua -i '%p hi'            # 行内模板
@@ -200,7 +200,7 @@ for _ = 1, n do haml.render(source, options, locals) end
 
 ### 用例格式
 
-`tests_patch.json` 与 `spec/*.json` 结构一致：
+`spec/tests_patch.json` 与 `spec/*.json` 结构一致：
 
 ```json
 {
@@ -234,7 +234,7 @@ for _ = 1, n do haml.render(source, options, locals) end
 
 ### 加用例的位置
 
-- 修 bug / 加特性 → 追加到 `tests_patch.json`（新建一个组，或并入同名组）
+- 修 bug / 加特性 → 追加到 `spec/tests_patch.json`（新建一个组，或并入同名组）；它是子模块文件，需要在 `spec/` 内单独提交，再回父仓库更新指针
 - 新建整个 JSON 文件 → 还需在 `test.lua` 的 `suites` 列表（`test.lua:104-109`）登记
 - **不要动 `spec/`**
 
@@ -316,5 +316,4 @@ git stash pop
 - [ ] 改过渲染/解析热路径 → `luajit bench.lua sample.haml 3000`，`render only (cached)` 无意外劣化
 - [ ] 行为有变更 → `REFERENCE.md` 对应章节已更新，且示例**实测过**
 - [ ] 版本变更 → `VERSION` + `lit-meta` + `Changelog.md` 三处同步
-- [ ] `git status` 中**没有** `spec/` 相关改动
 - [ ] 提交信息说明「改前错在哪」，而非只写「修复 bug」

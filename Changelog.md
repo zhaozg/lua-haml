@@ -80,7 +80,7 @@ history.
   `lhtml` caches its last translation per handler: repeated two-phase renders
   drop from ~50us to ~1us. A transcript of the audit is in the 0.4.3 notes.
 
-Tests: 141 JSON cases, 41 `lhtml` assertions, and the new
+Tests: 144 JSON cases, 41 `lhtml` assertions, and the new
 `test_security.lua` (16 assertions).
 
 ## 0.4.2
@@ -144,7 +144,7 @@ Tests: 141 JSON cases, 41 `lhtml` assertions, and the new
   in the precompiler as well, so the order no longer depends on which
   renders ran earlier in the same process.
 
-* Add `tests_patch.json` (23 regression cases) and wire it into `test.lua`.
+* Add the project regression suite (23 cases; now `spec/tests_patch.json`) and wire it into `test.lua`.
   It lives outside `spec/`, which is the shared `haml-spec` git submodule.
 
 ## 0.4.0 (In Process)

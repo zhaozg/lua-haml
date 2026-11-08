@@ -75,6 +75,13 @@ This closes the short path from an untrusted value to Lua code execution. It
 does **not** make Haml templates safe: the template itself is still code (see
 [Security model](#security-model)).
 
+One consequence: `#{}` inside a string passed to `=` is **not** interpolated.
+`%p= "Hi #{name}"` produces the literal text `Hi #{name}` (in two-phase mode it
+splices `name` into the Lua string literal, which is usually not what you want).
+Write the interpolation in template text (`%p Hi #{name}`) or use concatenation
+(`%p= "Hi " .. name`). In two-phase `=` code, `#{}` is an expression splice and
+must sit in expression position, as in `%p= 'p-' .. #{x}`.
+
 ### Compile once, render many
 
 `haml.compile` always returns a table, tagged with a metatable. `haml.render`
@@ -391,17 +398,18 @@ limitations table.
 ## Development
 
 ```sh
-luajit test.lua            # JSON suite (141 cases)
+luajit test.lua            # JSON suite (144 cases)
 luajit test_lhtml.lua      # lhtml unit tests (41 assertions)
 luajit test_security.lua   # error paths and contracts (16 assertions)
 luajit luahaml.lua sample.haml
 luajit bench.lua sample.haml 10000
 ```
 
-`tests_patch.json` holds this project's regression cases; `spec/` is the
-upstream haml-spec submodule and must not be modified. `AGENT.md` documents the
-file map and the traps for coding agents. Version bumps touch `VERSION`,
-`haml/init.lua` (`lit-meta`) and `Changelog.md`.
+`spec/tests_patch.json` holds this project's regression cases inside the
+`spec/` submodule; changes there need a commit in the submodule first, then a
+pointer update in this repository. `AGENT.md` documents the file map and the
+traps for coding agents. Version bumps touch `VERSION`, `haml/init.lua`
+(`lit-meta`) and `Changelog.md`.
 
 ## License
 
