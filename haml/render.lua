@@ -352,6 +352,23 @@ local function requote (s)
   return table.concat(out)
 end
 
+-- A `#{...}` that is already inside an lhtml `<% ... %>` code span is
+-- template code, not text interpolation.  An unmatched `<%` is treated as
+-- text by lhtml (STRAY), so it must not open a code span here either.
+-- Without this check, `%p= #{x}` becomes `<%= <%=x%> %>` and lhtml turns the
+-- inner placeholder into invalid Lua (`unexpected symbol near '<'`).
+local function inside_code (html, pos)
+  local scan = 1
+  while true do
+    local open = html:find('<%', scan, true)
+    if not open or open > pos then return false end
+    local close = html:find('%>', open + 2, true)
+    if not close then return false end
+    if close > pos then return true end
+    scan = close + 2
+  end
+end
+
 local function interpolate (html, options, locals, two_phase)
   if html:find('"#{', 1, true) then
     html = requote(html)
@@ -380,9 +397,15 @@ local function interpolate (html, options, locals, two_phase)
         if locals then val = locals[match] end
         if val == nil then val = match end
         if two_phase then
-          -- In two-phase mode this must stay a placeholder for template
-          -- code. Never splice a local value into Lua source.
-          out[#out + 1] = '<%=' .. match .. '%>'
+          -- In two-phase mode a text `#{}` must stay a placeholder for
+          -- template code.  Inside an existing `<%= ... %>` we only splice
+          -- the expression itself, never a `locals` value; wrapping it again
+          -- would produce `<%= <%=x%> %>` and invalid Lua.
+          if inside_code(html, first) then
+            out[#out + 1] = match
+          else
+            out[#out + 1] = '<%=' .. match .. '%>'
+          end
         else
           val = tostring(val)
           if options.escape_html then
