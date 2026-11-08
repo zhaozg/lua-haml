@@ -400,7 +400,7 @@ limitations table.
 ```sh
 luajit test.lua            # JSON suite (144 cases)
 luajit test_lhtml.lua      # lhtml unit tests (41 assertions)
-luajit test_security.lua   # error paths and contracts (16 assertions)
+luajit test_security.lua   # error paths and contracts (17 assertions)
 luajit luahaml.lua sample.haml
 luajit bench.lua sample.haml 10000
 ```

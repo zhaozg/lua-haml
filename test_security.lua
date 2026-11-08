@@ -115,6 +115,30 @@ do
 end
 
 ------------------------------------------------------------------------------
+--- two-phase interpolation edge cases
+------------------------------------------------------------------------------
+
+do
+  local lhtml = require "lhtml"
+  local function two_phase (tpl)
+    local compiled = haml.compile(haml.parse(tpl), { lhaml = true })
+    local mid = haml.render(compiled, { lhaml = true }, {})
+    local code = table.concat(assert(lhtml(mid)), '')
+    local out = {}
+    local env = setmetatable({
+      print = function (...) out[#out + 1] = tostring((...)) end,
+    }, { __index = _G })
+    local chunk = assert(loadstring(code))
+    setfenv(chunk, env)
+    chunk()
+    return table.concat(out, '')
+  end
+
+  local out = two_phase("- local x = 'X'\n%p a <% b #{x}")
+  ok('unmatched <% does not make invalid Lua', out:find('<% b x', 1, true) ~= nil, out)
+end
+
+------------------------------------------------------------------------------
 --- compiled-template contract
 ------------------------------------------------------------------------------
 

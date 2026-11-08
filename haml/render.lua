@@ -363,7 +363,11 @@ local function inside_code (html, pos)
     local open = html:find('<%', scan, true)
     if not open or open > pos then return false end
     local close = html:find('%>', open + 2, true)
-    if not close then return false end
+    if not close then
+      -- An unmatched '<%' is text to lhtml.  If we inserted an '<%=...%>'
+      -- after it, that close would pair with it and turn the text into code.
+      return true
+    end
     if close > pos then return true end
     scan = close + 2
   end

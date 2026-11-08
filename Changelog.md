@@ -81,7 +81,7 @@ history.
   drop from ~50us to ~1us. A transcript of the audit is in the 0.4.3 notes.
 
 Tests: 144 JSON cases, 41 `lhtml` assertions, and the new
-`test_security.lua` (16 assertions).
+`test_security.lua` (17 assertions).
 
 ## 0.4.2
 
